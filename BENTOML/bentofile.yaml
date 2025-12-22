@@ -1,0 +1,11 @@
+service: "service.py:svc"
+labels:
+  owner: "data_team"
+  project: "iris_classification"
+include:
+- "*.py"
+python:
+  packages:
+  - scikit-learn
+  - bentoml
+  - pandas
