@@ -9,7 +9,7 @@ ARGS=(run --config "$CONFIG" --output "$OUTPUT_DIR")
 if [[ -n "$MAX_RUNS" ]]; then
   ARGS+=(--max-runs "$MAX_RUNS")
 fi
-if [[ "$CONFIG" == *smoke* ]]; then
+if grep -q '"provider"[[:space:]]*:[[:space:]]*"scripted"' "$CONFIG"; then
   ARGS+=(--allow-scripted)
 fi
 

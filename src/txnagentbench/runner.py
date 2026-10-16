@@ -171,6 +171,10 @@ def run_matrix(
     max_runs: int | None = None,
     allow_scripted: bool = False,
 ) -> dict[str, int]:
+    if (output_dir / "artifact_manifest.json").exists():
+        raise RuntimeError(
+            "Output artifact is frozen by artifact_manifest.json; use a new output directory."
+        )
     config = load_config(config_path)
     rows = expand_matrix(config)
     current_environment = environment_manifest()
@@ -179,6 +183,8 @@ def run_matrix(
             raise RuntimeError("Primary experiments cannot use scripted agents.")
         if "coagent" not in config["policies"]:
             raise RuntimeError("Primary config must include CoAgent or document an approved protocol change.")
+        if "postgres_serializable" not in config["policies"]:
+            raise RuntimeError("Primary config must include the real PostgreSQL serializable baseline.")
     elif not allow_scripted and any(model.get("provider") == "scripted" for model in config["models"]):
         raise RuntimeError("Pass --allow-scripted for engineering-only smoke tests.")
 

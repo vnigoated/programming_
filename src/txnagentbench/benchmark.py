@@ -11,6 +11,9 @@ from .domains import build_environment
 from .models import DecisionModel
 
 
+IMPLEMENTED_POLICIES = {"serial", "naive", "occ", "txnguard"}
+
+
 @dataclass(frozen=True)
 class RunSpec:
     domain: str
@@ -35,11 +38,11 @@ class RunSpec:
 
 
 def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    if spec.policy == "coagent":
+    if spec.policy in {"coagent", "postgres_serializable"}:
         raise NotImplementedError(
-            "CoAgent is an explicit publication gate. Implement a faithful adapter before final runs."
+            f"{spec.policy} is an explicit publication gate. Implement its real adapter before final runs."
         )
-    if spec.policy not in {"serial", "naive", "occ", "txnguard"}:
+    if spec.policy not in IMPLEMENTED_POLICIES:
         raise ValueError(f"Unknown policy: {spec.policy}")
     if spec.fault_mode not in {"none", "duplicate_effect", "dependency_change"}:
         raise ValueError(f"Unknown fault mode: {spec.fault_mode}")

@@ -60,6 +60,15 @@ txnagentbench validate --output "$ARTIFACT_ROOT/domain-model-smoke"
 txnagentbench analyze --output "$ARTIFACT_ROOT/domain-model-smoke"
 ```
 
+For the current heterogeneous checkpoint, use the restart-safe wrapper:
+
+```bash
+bash scripts/run_diversity_model_smoke.sh /content/txnagentbench "$ARTIFACT_ROOT"
+```
+
+This checkpoint covers all four scenario profiles in every domain using the serial policy. It is a
+model-decision integration gate, not a policy-effectiveness result.
+
 ## Stage 5 Blinded pilot
 
 Status: completed on 2026-10-16 with 128/128 valid runs. See `docs/PILOT_REPORT.md`. The pilot
@@ -76,6 +85,18 @@ it until the 16-run cross-domain model smoke test validates without invalid mode
 ## Stage 6 Primary freeze
 
 Create an immutable primary configuration and record its SHA-256 hash. Tag the code commit. Archive package versions, model revisions, prompts, hardware information, and the analysis script before execution.
+
+Use the built-in preflight and artifact commands rather than notebook-specific hashing code:
+
+```bash
+txnagentbench readiness --config configs/primary.json --output "$ARTIFACT_ROOT"
+txnagentbench validate --output "$ARTIFACT_ROOT/primary"
+txnagentbench freeze --output "$ARTIFACT_ROOT/primary"
+txnagentbench verify-manifest --output "$ARTIFACT_ROOT/primary"
+```
+
+`readiness` must exit successfully before primary execution. `freeze` is run only after the
+artifact is complete and prevents accidental replacement of an existing manifest.
 
 The primary command must refuse to run when:
 

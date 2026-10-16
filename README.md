@@ -12,6 +12,8 @@ This repository is a restart-safe engineering scaffold for the TxnAgentBench stu
 - Deterministic schedule seeds
 - Immutable per-run JSONL traces
 - Atomic per-run summaries and automatic resume
+- Built-in artifact validation, SHA-256 freezing, and later integrity verification
+- Explicit primary-study readiness report that fails closed on missing baselines
 - Policy-level aggregation and paired bootstrap risk difference
 - Optional Hugging Face Transformers model adapter
 - A primary-study gate that rejects scripted models and stops at the unimplemented CoAgent adapter
@@ -28,11 +30,25 @@ txnagentbench run --config configs/smoke.json --output artifacts/smoke --allow-s
 txnagentbench analyze --output artifacts/smoke
 txnagentbench run --config configs/domain_smoke.json --output artifacts/domain-smoke --allow-scripted
 txnagentbench validate --output artifacts/domain-smoke
+txnagentbench freeze --output artifacts/domain-smoke
+txnagentbench verify-manifest --output artifacts/domain-smoke
 ```
 
 Run the full CPU-only diversity gate with `scripts/run_engineering_gates.sh` on Linux/Colab or
 `scripts/run_engineering_gates.ps1` on Windows. It covers four scenario families, two agent counts,
 three contention levels, two schedules, and normal plus duplicate-effect delivery.
+
+After reconnecting a GPU Colab runtime, the next locked checkpoint is one command:
+
+```bash
+bash scripts/run_diversity_model_smoke.sh \
+  /content/txnagentbench \
+  /content/drive/MyDrive/txnagentbench-artifacts
+```
+
+It probes persistent storage, runs all tests, executes the locked 16-run heterogeneous Qwen
+checkpoint, validates and analyzes it, freezes every file with SHA-256, verifies the manifest,
+and enforces zero invalid/unsafe decisions. A frozen output directory cannot be resumed or altered.
 
 Re-running the same command skips completed run IDs. Delete a single run directory only when intentionally rerunning that exact cell.
 
@@ -51,6 +67,8 @@ The experiment definitions and frozen decisions are in `docs/PROTOCOL.md`. Scrip
 results validate the oracles only and must not be reported as empirical findings.
 
 Do not launch the primary matrix until all publication gates in `docs/EXPERIMENT_RUNBOOK.md` pass.
+Run `txnagentbench readiness --config configs/primary_template.json --output /mounted/artifacts` to see the unresolved gates;
+its nonzero exit status is intentional until the real PostgreSQL and CoAgent adapters exist.
 
 ## Artifact layout
 

@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 
 from .analysis import analyze
+from .artifacts import freeze_artifact, verify_manifest
+from .readiness import primary_readiness
 from .runner import expand_matrix, load_config, run_matrix
 from .validation import validate_artifact
 
@@ -28,6 +30,16 @@ def main() -> None:
     validate = commands.add_parser("validate", help="Validate a completed artifact against its frozen config")
     validate.add_argument("--output", type=Path, required=True)
 
+    freeze = commands.add_parser("freeze", help="Validate and hash an immutable experiment artifact")
+    freeze.add_argument("--output", type=Path, required=True)
+
+    verify = commands.add_parser("verify-manifest", help="Verify every file in a frozen artifact")
+    verify.add_argument("--output", type=Path, required=True)
+
+    readiness = commands.add_parser("readiness", help="Report publication-blocking primary-study gates")
+    readiness.add_argument("--config", type=Path, required=True)
+    readiness.add_argument("--output", type=Path)
+
     args = parser.parse_args()
     if args.command == "plan":
         config = load_config(args.config)
@@ -42,6 +54,18 @@ def main() -> None:
         result = validate_artifact(args.output)
         print(json.dumps(result, indent=2))
         if not result["valid"]:
+            raise SystemExit(1)
+    elif args.command == "freeze":
+        print(json.dumps(freeze_artifact(args.output), indent=2))
+    elif args.command == "verify-manifest":
+        result = verify_manifest(args.output)
+        print(json.dumps(result, indent=2))
+        if not result["valid"]:
+            raise SystemExit(1)
+    elif args.command == "readiness":
+        result = primary_readiness(args.config, args.output)
+        print(json.dumps(result, indent=2))
+        if not result["ready"]:
             raise SystemExit(1)
 
 
