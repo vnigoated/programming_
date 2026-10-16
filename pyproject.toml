@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "txnagentbench"
+version = "0.1.0"
+description = "Restart-safe benchmark scaffold for concurrency failures in multi-agent LLM systems"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+gpu = [
+  "accelerate>=1.0",
+  "bitsandbytes>=0.45",
+  "safetensors>=0.4",
+  "sentencepiece>=0.2",
+  "torch>=2.4",
+  "transformers>=4.46",
+]
+analysis = ["pandas>=2.2", "pyarrow>=17", "scipy>=1.13", "statsmodels>=0.14"]
+test = ["pytest>=8", "hypothesis>=6"]
+
+[project.scripts]
+txnagentbench = "txnagentbench.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

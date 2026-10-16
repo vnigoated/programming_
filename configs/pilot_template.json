@@ -1,0 +1,18 @@
+{
+  "stage": "pilot",
+  "domains": ["inventory", "calendar", "support", "cloud"],
+  "policies": ["serial", "naive", "occ", "txnguard"],
+  "agent_counts": [2, 4],
+  "contention_levels": [0, 50, 75],
+  "models": [
+    {
+      "name": "replace-with-model-a",
+      "provider": "transformers",
+      "model_id": "REPLACE_WITH_HUGGINGFACE_MODEL_ID",
+      "revision": "REPLACE_WITH_COMMIT_HASH",
+      "quantization": "bf16"
+    }
+  ],
+  "schedule_seeds": [0, 1]
+}
+

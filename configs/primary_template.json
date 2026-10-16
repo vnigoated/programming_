@@ -1,0 +1,25 @@
+{
+  "stage": "primary",
+  "domains": ["inventory", "calendar", "support", "cloud"],
+  "policies": ["serial", "naive", "occ", "coagent", "txnguard"],
+  "agent_counts": [2, 4],
+  "contention_levels": [0, 50, 75],
+  "models": [
+    {
+      "name": "model-family-a",
+      "provider": "transformers",
+      "model_id": "REPLACE_WITH_HUGGINGFACE_MODEL_A",
+      "revision": "REPLACE_WITH_COMMIT_HASH",
+      "quantization": "bf16"
+    },
+    {
+      "name": "model-family-b",
+      "provider": "transformers",
+      "model_id": "REPLACE_WITH_HUGGINGFACE_MODEL_B",
+      "revision": "REPLACE_WITH_COMMIT_HASH",
+      "quantization": "bf16"
+    }
+  ],
+  "schedule_seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+}
+
