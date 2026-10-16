@@ -52,11 +52,22 @@ txnagentbench run --config configs/pilot_local.json --output "$ARTIFACT_ROOT/mod
 
 Inspect every failed and invalid action. Do not silently convert malformed model output into a successful action.
 
+After domain or prompt changes, run the locked 16-run cross-domain configuration before the pilot:
+
+```bash
+txnagentbench run --config configs/domain_model_smoke_qwen25_7b.json --output "$ARTIFACT_ROOT/domain-model-smoke"
+txnagentbench validate --output "$ARTIFACT_ROOT/domain-model-smoke"
+txnagentbench analyze --output "$ARTIFACT_ROOT/domain-model-smoke"
+```
+
 ## Stage 5 Blinded pilot
 
 Run approximately 100 scenario-schedule cells across the candidate policies. Estimate runtime, token use, paired disagreement, severe-violation rate, and infrastructure-failure rate. Use the pilot to calculate the number of final schedule seeds.
 
 Pilot data must be stored separately from the primary experiment and excluded from primary confirmatory estimates.
+
+The locked single-model pilot configuration expands to 128 paired engineering runs. Do not execute
+it until the 16-run cross-domain model smoke test validates without invalid model actions.
 
 ## Stage 6 Primary freeze
 
