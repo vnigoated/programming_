@@ -21,6 +21,24 @@ def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else float("nan")
 
 
+def result_scope_note(output_dir: Path) -> str:
+    config_path = output_dir / "frozen_config.json"
+    if not config_path.exists():
+        return "Result scope is unknown because the frozen configuration is missing."
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = json.load(handle)
+    if any(model.get("provider") == "scripted" for model in config.get("models", [])):
+        return "Scripted-agent results validate infrastructure only and must not be reported as TMLR findings."
+    stage = config.get("stage", "unknown")
+    if stage in {"model-smoke", "smoke"}:
+        return "Real-model smoke-test results validate model integration only and are not final TMLR findings."
+    if stage == "pilot":
+        return "Pilot results are for experiment design and must be excluded from primary confirmatory estimates."
+    if stage == "primary":
+        return "Primary-study results must be interpreted under the frozen protocol and recorded exclusion rules."
+    return f"Real-model results from stage '{stage}' are exploratory and are not final TMLR findings."
+
+
 def bootstrap_interval(values: list[float], samples: int = 2000, seed: int = 1042) -> tuple[float, float]:
     if not values:
         return float("nan"), float("nan")
@@ -108,7 +126,7 @@ def analyze(output_dir: Path) -> dict[str, Any]:
             f"TxnGuard minus naive severe-violation risk difference: {paired['risk_difference']:.3f} "
             f"(95% paired bootstrap interval {low:.3f} to {high:.3f}; {paired['pairs']} pairs).",
             "",
-            "Scripted-agent results validate infrastructure only and must not be reported as TMLR findings.",
+            result_scope_note(output_dir),
         ]
     )
     (analysis_dir / "report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
