@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .analysis import analyze
 from .runner import expand_matrix, load_config, run_matrix
+from .validation import validate_artifact
 
 
 def main() -> None:
@@ -24,6 +25,9 @@ def main() -> None:
     report = commands.add_parser("analyze", help="Aggregate completed run summaries")
     report.add_argument("--output", type=Path, required=True)
 
+    validate = commands.add_parser("validate", help="Validate a completed artifact against its frozen config")
+    validate.add_argument("--output", type=Path, required=True)
+
     args = parser.parse_args()
     if args.command == "plan":
         config = load_config(args.config)
@@ -34,6 +38,11 @@ def main() -> None:
         print(json.dumps(result, indent=2))
     elif args.command == "analyze":
         print(json.dumps(analyze(args.output), indent=2))
+    elif args.command == "validate":
+        result = validate_artifact(args.output)
+        print(json.dumps(result, indent=2))
+        if not result["valid"]:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

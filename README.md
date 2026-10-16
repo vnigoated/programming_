@@ -27,6 +27,7 @@ txnagentbench plan --config configs/smoke.json
 txnagentbench run --config configs/smoke.json --output artifacts/smoke --allow-scripted
 txnagentbench analyze --output artifacts/smoke
 txnagentbench run --config configs/domain_smoke.json --output artifacts/domain-smoke --allow-scripted
+txnagentbench validate --output artifacts/domain-smoke
 ```
 
 Re-running the same command skips completed run IDs. Delete a single run directory only when intentionally rerunning that exact cell.

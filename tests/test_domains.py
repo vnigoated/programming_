@@ -134,3 +134,40 @@ def test_fault_mode_changes_run_identity():
     baseline = RunSpec("inventory", "occ", 2, 0, "scripted-v1", 0)
     replay = RunSpec("inventory", "occ", 2, 0, "scripted-v1", 0, 0, "duplicate_effect")
     assert baseline.run_id != replay.run_id
+
+
+def test_oracles_reject_constructed_invalid_histories():
+    inventory = build_environment("inventory", 2, 100)
+    inventory.items["sku-shared"]["reserved"] = 2
+    assert inventory.score().invariant_violations == ["sku-shared"]
+
+    calendar = build_environment("calendar", 2, 100)
+    slot = next(iter(calendar.slots))
+    calendar.slots[slot]["booking_ids"] = ["meeting-a", "meeting-b"]
+    assert calendar.score().invariant_violations == [slot]
+
+    support = build_environment("support", 2, 100)
+    case_id = next(iter(support.cases))
+    support.cases[case_id]["refunded_cents"] = support.cases[case_id]["eligible_cents"] + 1
+    assert support.score().invariant_violations == [case_id]
+
+    cloud = build_environment("cloud", 2, 100)
+    pool_id = next(iter(cloud.pools))
+    cloud.pools[pool_id]["used_units"] = cloud.pools[pool_id]["quota_units"] + 1
+    cloud.deployments.append(
+        {
+            "effect": "deployment",
+            "pool_id": pool_id,
+            "deployment_id": "bad-generation",
+            "dependency_generation": cloud.pools[pool_id]["dependency_generation"] - 1,
+            "idempotency_key": "corrupt",
+        }
+    )
+    oracle = cloud.score()
+    assert oracle.invariant_violations == [pool_id]
+    assert oracle.dependency_violations == ["bad-generation"]
+
+
+def test_fresh_domain_states_pass_all_oracles():
+    for domain in DOMAINS:
+        assert build_environment(domain, 2, 100).score().severe is False
