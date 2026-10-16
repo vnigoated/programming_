@@ -75,6 +75,9 @@ def analyze(output_dir: Path) -> dict[str, Any]:
                     [float(x.get("dependency_violation", False)) for x in items]
                 ),
                 "invalid_action_rate": mean([float(x["invalid_actions"] > 0) for x in items]),
+                "unsafe_proposal_rate": mean(
+                    [float(x.get("unsafe_proposals", 0) > 0) for x in items]
+                ),
                 "mean_conflicts": mean([float(x["conflicts"]) for x in items]),
                 "median_duration_seconds": statistics.median(x["duration_seconds"] for x in items),
                 "mean_total_tokens": mean([x["input_tokens"] + x["output_tokens"] for x in items]),
@@ -141,6 +144,9 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         row["agent_count"],
         row["contention"],
         row["model_name"],
+        row.get("model_revision"),
+        row.get("prompt_version"),
+        row.get("quantization"),
         row.get("scenario_seed", 0),
         row["schedule_seed"],
         row.get("fault_mode", "none"),

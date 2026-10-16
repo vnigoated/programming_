@@ -107,6 +107,7 @@ class InventoryEnvironment(DomainEnvironment):
             "reserved": state["reserved"],
             "capacity": state["stock"],
             "allocated": state["reserved"],
+            "available": state["stock"] - state["reserved"],
             "version": state["version"],
         }
 
@@ -192,6 +193,7 @@ class CalendarEnvironment(DomainEnvironment):
             "booking_ids": list(state["booking_ids"]),
             "capacity": 1,
             "allocated": len(state["booking_ids"]),
+            "available": 1 - len(state["booking_ids"]),
             "version": state["version"],
         }
 
@@ -286,6 +288,7 @@ class SupportEnvironment(DomainEnvironment):
             "refunded_cents": state["refunded_cents"],
             "capacity": state["eligible_cents"],
             "allocated": state["refunded_cents"],
+            "available": state["eligible_cents"] - state["refunded_cents"],
             "version": state["version"],
         }
 
@@ -409,6 +412,7 @@ class CloudEnvironment(DomainEnvironment):
             "dependency_generation": state["dependency_generation"],
             "capacity": state["quota_units"],
             "allocated": state["used_units"],
+            "available": state["quota_units"] - state["used_units"],
             "version": state["version"],
         }
 

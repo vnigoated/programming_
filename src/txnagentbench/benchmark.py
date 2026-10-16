@@ -21,10 +21,16 @@ class RunSpec:
     schedule_seed: int
     scenario_seed: int = 0
     fault_mode: str = "none"
+    model_revision: str | None = None
+    prompt_version: str | None = None
+    quantization: str | None = None
+
+    def identity(self) -> dict[str, Any]:
+        return {key: value for key, value in asdict(self).items() if value is not None}
 
     @property
     def run_id(self) -> str:
-        raw = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
+        raw = json.dumps(self.identity(), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(raw.encode()).hexdigest()[:20]
 
 
@@ -49,6 +55,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
     rejected = 0
     conflicts = 0
     invalid_actions = 0
+    unsafe_proposals = 0
     input_tokens = 0
     output_tokens = 0
     model_latency = 0.0
@@ -104,6 +111,19 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                 }
             )
             continue
+
+        proposal_safe = environment.can_apply(observation, decision.amount)
+        if not proposal_safe:
+            unsafe_proposals += 1
+            trace.append(
+                {
+                    "event": "unsafe_proposal",
+                    "agent": agent,
+                    "resource_id": observation["resource_id"],
+                    "available": observation["available"],
+                    "requested": decision.amount,
+                }
+            )
 
         if spec.policy in {"occ", "txnguard"} and environment.is_stale(observation):
             conflicts += 1
@@ -177,13 +197,14 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
     feasible = environment.successful_action_capacity()
     task_success = accepted >= feasible and not oracle.severe and invalid_actions == 0
     summary = {
-        **asdict(spec),
+        **spec.identity(),
         "run_id": spec.run_id,
         "completed": True,
         "accepted": accepted,
         "rejected": rejected,
         "conflicts": conflicts,
         "invalid_actions": invalid_actions,
+        "unsafe_proposals": unsafe_proposals,
         "task_success": task_success,
         "invariant_violation": bool(oracle.invariant_violations),
         "side_effect_violation": bool(oracle.side_effect_violations),

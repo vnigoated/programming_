@@ -74,12 +74,35 @@ class WrongAmountModel:
         return None
 
 
+class AlwaysApplyModel:
+    def decide(self, observation, task):
+        return Decision(action="apply", amount=int(task["amount"]), raw_output="apply")
+
+    def close(self):
+        return None
+
+
 def test_model_cannot_change_transaction_amount():
     spec = RunSpec("support", "txnguard", 2, 100, "wrong-amount", 0)
     row, trace = run_benchmark(spec, WrongAmountModel())
     assert row["invalid_actions"] == 2
     assert row["accepted"] == 0
     assert any(event["event"] == "invalid_amount" for event in trace)
+
+
+def test_unsafe_serial_proposal_is_measured_and_txnguard_blocks_stale_commit():
+    serial_spec = RunSpec("inventory", "serial", 2, 100, "always-apply", 0)
+    serial, serial_trace = run_benchmark(serial_spec, AlwaysApplyModel())
+    assert serial["unsafe_proposals"] == 1
+    assert serial["severe_violation"] is True
+    assert any(event["event"] == "unsafe_proposal" for event in serial_trace)
+
+    guard_spec = RunSpec("inventory", "txnguard", 2, 100, "always-apply", 0)
+    guarded, _ = run_benchmark(guard_spec, AlwaysApplyModel())
+    assert guarded["unsafe_proposals"] == 0
+    assert guarded["conflicts"] == 1
+    assert guarded["severe_violation"] is False
+    assert guarded["task_success"] is True
 
 
 def test_model_experiment_rejects_mutable_revision():
@@ -134,6 +157,32 @@ def test_fault_mode_changes_run_identity():
     baseline = RunSpec("inventory", "occ", 2, 0, "scripted-v1", 0)
     replay = RunSpec("inventory", "occ", 2, 0, "scripted-v1", 0, 0, "duplicate_effect")
     assert baseline.run_id != replay.run_id
+
+
+def test_model_revision_and_prompt_change_run_identity():
+    first = RunSpec(
+        "inventory",
+        "serial",
+        2,
+        100,
+        "model-a",
+        0,
+        model_revision="a" * 40,
+        prompt_version="allocation-v2",
+        quantization="bf16",
+    )
+    second = RunSpec(
+        "inventory",
+        "serial",
+        2,
+        100,
+        "model-a",
+        0,
+        model_revision="b" * 40,
+        prompt_version="allocation-v2",
+        quantization="bf16",
+    )
+    assert first.run_id != second.run_id
 
 
 def test_oracles_reject_constructed_invalid_histories():

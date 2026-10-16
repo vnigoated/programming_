@@ -37,7 +37,13 @@ class ScriptedDecisionModel:
 class TransformersDecisionModel:
     """Small JSON-only inference adapter suitable for one A100 Colab runtime."""
 
-    def __init__(self, model_id: str, revision: str | None = None, quantization: str = "bf16"):
+    def __init__(
+        self,
+        model_id: str,
+        revision: str | None = None,
+        quantization: str = "bf16",
+        prompt_version: str = "allocation-v2",
+    ):
         try:
             import torch
             from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
@@ -45,6 +51,9 @@ class TransformersDecisionModel:
             raise RuntimeError("Install the GPU extras with: pip install -e '.[gpu]'") from exc
 
         self.torch = torch
+        if prompt_version != "allocation-v2":
+            raise ValueError(f"Unsupported prompt version: {prompt_version}")
+        self.prompt_version = prompt_version
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_id, revision=revision, trust_remote_code=False
         )
@@ -65,8 +74,11 @@ class TransformersDecisionModel:
     def decide(self, observation: dict[str, Any], task: dict[str, Any]) -> Decision:
         system = (
             "You are an agent completing a resource-allocation task from one observed snapshot. "
-            "If allocated + requested amount is less than or equal to capacity, choose apply. "
-            "Otherwise choose reject. Use only the supplied observation; do not speculate about "
+            "The observation contains an integer named available. Compare requested_amount with "
+            "available. Choose apply exactly when requested_amount is less than or equal to "
+            "available. Choose reject exactly when requested_amount is greater than available. "
+            "In particular, when available is zero and requested_amount is positive, choose reject. "
+            "Use only the supplied observation; do not speculate about "
             "other agents or future changes. Return exactly one JSON object with action and amount, "
             "for example {\"action\":\"apply\",\"amount\":1}. Valid actions are apply and reject. "
             "Do not include reasoning, Markdown, or additional text."
@@ -77,6 +89,7 @@ class TransformersDecisionModel:
                 "requested_amount": int(task["amount"]),
                 "domain": task["domain"],
                 "instruction": "Fulfil the request when the observed capacity is sufficient.",
+                "prompt_version": self.prompt_version,
             },
             sort_keys=True,
         )
@@ -132,6 +145,7 @@ def build_model(config: dict[str, Any]) -> DecisionModel:
             model_id=config["model_id"],
             revision=config.get("revision"),
             quantization=config.get("quantization", "bf16"),
+            prompt_version=config.get("prompt_version", "allocation-v2"),
         )
     raise ValueError(f"Unknown model provider: {provider}")
 

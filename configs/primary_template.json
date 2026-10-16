@@ -10,14 +10,16 @@
       "provider": "transformers",
       "model_id": "REPLACE_WITH_HUGGINGFACE_MODEL_A",
       "revision": "REPLACE_WITH_COMMIT_HASH",
-      "quantization": "bf16"
+      "quantization": "bf16",
+      "prompt_version": "allocation-v2"
     },
     {
       "name": "model-family-b",
       "provider": "transformers",
       "model_id": "REPLACE_WITH_HUGGINGFACE_MODEL_B",
       "revision": "REPLACE_WITH_COMMIT_HASH",
-      "quantization": "bf16"
+      "quantization": "bf16",
+      "prompt_version": "allocation-v2"
     }
   ],
   "scenario_seeds": [0, 1, 2, 3, 4],

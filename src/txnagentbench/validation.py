@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +9,7 @@ from .runner import expand_matrix, load_config
 
 
 def artifact_run_id(spec, config: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    identity = asdict(spec)
+    identity = spec.identity()
     if "scenario_seeds" not in config:
         identity.pop("scenario_seed")
     if "fault_modes" not in config:
@@ -29,7 +28,9 @@ def validate_artifact(output_dir: Path) -> dict[str, Any]:
         errors.append("missing environment.json")
 
     config = load_config(config_path)
-    expected_rows = expand_matrix(config)
+    # Historical artifacts are checked against the requirements and identity schema
+    # frozen with that artifact, not retroactively rejected by newer launch gates.
+    expected_rows = expand_matrix(config, enforce_current_requirements=False)
     expected = {}
     for spec, _ in expected_rows:
         run_id, identity = artifact_run_id(spec, config)

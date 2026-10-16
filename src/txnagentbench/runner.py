@@ -48,6 +48,10 @@ def validate_config(config: dict[str, Any]) -> None:
                 raise ValueError(
                     f"Model {model.get('name', '<unnamed>')} must use a 40-character immutable revision."
                 )
+            if model.get("prompt_version") != "allocation-v2":
+                raise ValueError(
+                    f"Model {model.get('name', '<unnamed>')} must freeze prompt_version allocation-v2."
+                )
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -55,8 +59,11 @@ def load_config(path: Path) -> dict[str, Any]:
         return json.load(handle)
 
 
-def expand_matrix(config: dict[str, Any]) -> list[tuple[RunSpec, dict[str, Any]]]:
-    validate_config(config)
+def expand_matrix(
+    config: dict[str, Any], enforce_current_requirements: bool = True
+) -> list[tuple[RunSpec, dict[str, Any]]]:
+    if enforce_current_requirements:
+        validate_config(config)
     rows: list[tuple[RunSpec, dict[str, Any]]] = []
     for (
         domain,
@@ -86,6 +93,15 @@ def expand_matrix(config: dict[str, Any]) -> list[tuple[RunSpec, dict[str, Any]]
             schedule_seed=int(schedule_seed),
             scenario_seed=int(scenario_seed),
             fault_mode=str(fault_mode),
+            model_revision=(
+                str(model["revision"]) if model.get("prompt_version") is not None else None
+            ),
+            prompt_version=model.get("prompt_version"),
+            quantization=(
+                str(model.get("quantization", "bf16"))
+                if model.get("prompt_version") is not None
+                else None
+            ),
         )
         rows.append((spec, model))
     return sorted(rows, key=lambda item: (item[0].model_name, item[0].run_id))
