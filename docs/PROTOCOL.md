@@ -12,7 +12,7 @@ transaction-aware execution layer reduce those failures without unacceptable los
 ## Unit of analysis and pairing
 
 One run is identified by domain, scenario seed, schedule seed, model revision, agent count,
-contention level, and execution policy. The same cell is paired across policies. Scenario seeds
+contention level, injected fault mode, and execution policy. The same cell is paired across policies. Scenario seeds
 change task data; schedule seeds change execution order. These sources of variation must not be
 conflated. Model and code revisions must be immutable in pilot and primary artifacts.
 
@@ -67,6 +67,17 @@ Agents deploy services against quota while referencing a dependency generation. 
 quota usage, dependency readiness, generation, and a version. The external effect is deployment
 creation. Oracles detect quota overflow, deployments above quota, ledger/deployment disagreement,
 and deployment against the wrong dependency generation.
+
+## Fault modes
+
+- `none`: no injected delivery failure.
+- `duplicate_effect`: after a successful commit, the external-effect delivery is replayed with the
+  same idempotency key, modeling at-least-once delivery after an ambiguous acknowledgement. Serial
+  execution and OCC do not inherently deduplicate this external replay. TxnGuard's effect ledger
+  must suppress it. The trace records both the replay attempt and whether delivery occurred.
+
+Additional crash points must be added before the primary freeze. Fault injection is deterministic
+and paired across policies; it must never depend on an observed treatment result.
 
 ## Policies
 

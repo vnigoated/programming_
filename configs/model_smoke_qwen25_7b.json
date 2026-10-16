@@ -14,5 +14,6 @@
     }
   ],
   "scenario_seeds": [0],
-  "schedule_seeds": [0]
+  "schedule_seeds": [0],
+  "fault_modes": ["none"]
 }

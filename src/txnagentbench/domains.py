@@ -77,6 +77,11 @@ class DomainEnvironment(ABC):
     @abstractmethod
     def side_effect_count(self) -> int: ...
 
+    @abstractmethod
+    def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
+        """Replay an at-least-once effect. Return true when another effect is delivered."""
+        ...
+
 
 class InventoryEnvironment(DomainEnvironment):
     name = "inventory"
@@ -153,6 +158,13 @@ class InventoryEnvironment(DomainEnvironment):
 
     def side_effect_count(self) -> int:
         return len(self.shipments)
+
+    def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
+        effect = next(x for x in self.shipments if x["idempotency_key"] == idempotency_key)
+        if guarded and any(x["idempotency_key"] == idempotency_key for x in self.shipments):
+            return False
+        self.shipments.append(dict(effect))
+        return True
 
 
 class CalendarEnvironment(DomainEnvironment):
@@ -236,6 +248,13 @@ class CalendarEnvironment(DomainEnvironment):
 
     def side_effect_count(self) -> int:
         return len(self.invitations)
+
+    def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
+        effect = next(x for x in self.invitations if x["idempotency_key"] == idempotency_key)
+        if guarded and any(x["idempotency_key"] == idempotency_key for x in self.invitations):
+            return False
+        self.invitations.append(dict(effect))
+        return True
 
 
 class SupportEnvironment(DomainEnvironment):
@@ -343,6 +362,15 @@ class SupportEnvironment(DomainEnvironment):
 
     def side_effect_count(self) -> int:
         return len(self.refunds)
+
+    def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
+        refund = next(x for x in self.refunds if x["idempotency_key"] == idempotency_key)
+        notice = next(x for x in self.notifications if x["idempotency_key"] == idempotency_key)
+        if guarded and any(x["idempotency_key"] == idempotency_key for x in self.refunds):
+            return False
+        self.refunds.append(dict(refund))
+        self.notifications.append(dict(notice))
+        return True
 
 
 class CloudEnvironment(DomainEnvironment):
@@ -453,6 +481,13 @@ class CloudEnvironment(DomainEnvironment):
 
     def side_effect_count(self) -> int:
         return len(self.deployments)
+
+    def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
+        effect = next(x for x in self.deployments if x["idempotency_key"] == idempotency_key)
+        if guarded and any(x["idempotency_key"] == idempotency_key for x in self.deployments):
+            return False
+        self.deployments.append(dict(effect))
+        return True
 
 
 DOMAIN_TYPES: dict[str, type[DomainEnvironment]] = {

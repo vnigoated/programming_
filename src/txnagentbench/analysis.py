@@ -111,6 +111,31 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         writer.writeheader()
         writer.writerows(domain_policy_rows)
 
+    fault_policy_rows = []
+    by_fault_policy: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_fault_policy[(row.get("fault_mode", "none"), row["policy"])].append(row)
+    for (fault_mode, policy), items in sorted(by_fault_policy.items()):
+        fault_policy_rows.append(
+            {
+                "fault_mode": fault_mode,
+                "policy": policy,
+                "runs": len(items),
+                "task_success_rate": mean([float(x["task_success"]) for x in items]),
+                "severe_violation_rate": mean([float(x["severe_violation"]) for x in items]),
+                "lost_update_rate": mean([float(x["lost_update"]) for x in items]),
+                "side_effect_violation_rate": mean(
+                    [float(x["side_effect_violation"]) for x in items]
+                ),
+            }
+        )
+    with (analysis_dir / "fault_policy_metrics.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(fault_policy_rows[0]))
+        writer.writeheader()
+        writer.writerows(fault_policy_rows)
+
     pair_key = lambda row: (
         row["domain"],
         row["agent_count"],
@@ -118,6 +143,7 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         row["model_name"],
         row.get("scenario_seed", 0),
         row["schedule_seed"],
+        row.get("fault_mode", "none"),
     )
     by_key: dict[tuple[Any, ...], dict[str, dict[str, Any]]] = defaultdict(dict)
     for row in rows:
@@ -169,6 +195,7 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         "runs": len(rows),
         "policy_metrics": policy_rows,
         "domain_policy_metrics": domain_policy_rows,
+        "fault_policy_metrics": fault_policy_rows,
         "paired": paired,
     }
 

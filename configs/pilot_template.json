@@ -2,7 +2,7 @@
   "stage": "pilot",
   "domains": ["inventory", "calendar", "support", "cloud"],
   "policies": ["serial", "naive", "occ", "txnguard"],
-  "agent_counts": [2, 4],
+  "agent_counts": [2],
   "contention_levels": [0, 100],
   "models": [
     {
@@ -14,6 +14,7 @@
     }
   ],
   "scenario_seeds": [0, 1],
-  "schedule_seeds": [0, 1]
+  "schedule_seeds": [0],
+  "fault_modes": ["none", "duplicate_effect"]
 }
 

@@ -12,6 +12,11 @@ def result(domain: str, policy: str, contention: int = 100, scenario_seed: int =
     return run_benchmark(spec, ScriptedDecisionModel())[0]
 
 
+def fault_result(domain: str, policy: str):
+    spec = RunSpec(domain, policy, 2, 0, "scripted-v1", 0, 0, "duplicate_effect")
+    return run_benchmark(spec, ScriptedDecisionModel())
+
+
 def test_naive_exposes_domain_specific_failure_under_contention():
     for domain in DOMAINS:
         row = result(domain, "naive")
@@ -100,3 +105,32 @@ def test_model_experiment_rejects_mutable_revision():
         assert "immutable revision" in str(exc)
     else:
         raise AssertionError("A mutable model revision was accepted")
+
+
+def test_occ_does_not_deduplicate_external_effect_replay():
+    for domain in DOMAINS:
+        row, trace = fault_result(domain, "occ")
+        assert row["severe_violation"] is True
+        assert row["side_effect_violation"] is True
+        assert any(
+            event["event"] == "effect_replay" and event["delivered"] is True
+            for event in trace
+        )
+
+
+def test_txnguard_deduplicates_external_effect_replay():
+    for domain in DOMAINS:
+        row, trace = fault_result(domain, "txnguard")
+        assert row["severe_violation"] is False
+        assert row["task_success"] is True
+        assert all(
+            event["delivered"] is False
+            for event in trace
+            if event["event"] == "effect_replay"
+        )
+
+
+def test_fault_mode_changes_run_identity():
+    baseline = RunSpec("inventory", "occ", 2, 0, "scripted-v1", 0)
+    replay = RunSpec("inventory", "occ", 2, 0, "scripted-v1", 0, 0, "duplicate_effect")
+    assert baseline.run_id != replay.run_id

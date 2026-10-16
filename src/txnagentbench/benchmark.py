@@ -20,6 +20,7 @@ class RunSpec:
     model_name: str
     schedule_seed: int
     scenario_seed: int = 0
+    fault_mode: str = "none"
 
     @property
     def run_id(self) -> str:
@@ -34,6 +35,8 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
         )
     if spec.policy not in {"serial", "naive", "occ", "txnguard"}:
         raise ValueError(f"Unknown policy: {spec.policy}")
+    if spec.fault_mode not in {"none", "duplicate_effect"}:
+        raise ValueError(f"Unknown fault mode: {spec.fault_mode}")
 
     environment = build_environment(
         spec.domain, spec.agent_count, spec.contention, spec.scenario_seed
@@ -155,6 +158,19 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                 "state": state,
             }
         )
+        if spec.fault_mode == "duplicate_effect":
+            delivered = environment.replay_effect(
+                idempotency_key=idempotency_key,
+                guarded=spec.policy == "txnguard",
+            )
+            trace.append(
+                {
+                    "event": "effect_replay",
+                    "agent": agent,
+                    "idempotency_key": idempotency_key,
+                    "delivered": delivered,
+                }
+            )
 
     oracle = environment.score()
     duration = time.perf_counter() - start

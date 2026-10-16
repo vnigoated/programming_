@@ -6,5 +6,6 @@
   "contention_levels": [0, 100],
   "models": [{"name": "scripted-v1", "provider": "scripted"}],
   "scenario_seeds": [0, 1, 2],
-  "schedule_seeds": [0, 1]
+  "schedule_seeds": [0, 1],
+  "fault_modes": ["none", "duplicate_effect"]
 }

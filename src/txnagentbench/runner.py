@@ -36,6 +36,9 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("Contention levels must be between 0 and 100.")
     if any(int(value) < 1 for value in config["agent_counts"]):
         raise ValueError("Agent counts must be positive.")
+    unknown_faults = sorted(set(config.get("fault_modes", ["none"])) - {"none", "duplicate_effect"})
+    if unknown_faults:
+        raise ValueError(f"Unknown fault modes: {', '.join(unknown_faults)}")
     if config["stage"] in {"model-smoke", "model_smoke", "pilot", "primary"}:
         for model in config["models"]:
             if model.get("provider") == "scripted":
@@ -55,7 +58,16 @@ def load_config(path: Path) -> dict[str, Any]:
 def expand_matrix(config: dict[str, Any]) -> list[tuple[RunSpec, dict[str, Any]]]:
     validate_config(config)
     rows: list[tuple[RunSpec, dict[str, Any]]] = []
-    for domain, policy, agents, contention, model, scenario_seed, schedule_seed in itertools.product(
+    for (
+        domain,
+        policy,
+        agents,
+        contention,
+        model,
+        scenario_seed,
+        schedule_seed,
+        fault_mode,
+    ) in itertools.product(
         config["domains"],
         config["policies"],
         config["agent_counts"],
@@ -63,6 +75,7 @@ def expand_matrix(config: dict[str, Any]) -> list[tuple[RunSpec, dict[str, Any]]
         config["models"],
         config.get("scenario_seeds", [0]),
         config["schedule_seeds"],
+        config.get("fault_modes", ["none"]),
     ):
         spec = RunSpec(
             domain=domain,
@@ -72,6 +85,7 @@ def expand_matrix(config: dict[str, Any]) -> list[tuple[RunSpec, dict[str, Any]]
             model_name=model["name"],
             schedule_seed=int(schedule_seed),
             scenario_seed=int(scenario_seed),
+            fault_mode=str(fault_mode),
         )
         rows.append((spec, model))
     return sorted(rows, key=lambda item: (item[0].model_name, item[0].run_id))

@@ -7,6 +7,7 @@ This repository is a restart-safe engineering scaffold for the TxnAgentBench stu
 - Four independent in-memory domain simulators for inventory, calendar, support, and cloud
 - Domain-specific observations, actions, state transitions, side effects, and correctness oracles
 - Independent scenario and schedule seeds
+- Paired at-least-once external-effect replay with idempotency tracing
 - Serial, naive parallel, optimistic concurrency, and TxnGuard reference policies
 - Deterministic schedule seeds
 - Immutable per-run JSONL traces
@@ -59,6 +60,8 @@ artifacts/<stage>/
     error.json        # only on failure
   analysis/
     policy_metrics.csv
+    domain_policy_metrics.csv
+    fault_policy_metrics.csv
     paired_effect.json
     report.md
 ```
