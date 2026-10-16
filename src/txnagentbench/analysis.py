@@ -52,6 +52,10 @@ def bootstrap_interval(values: list[float], samples: int = 2000, seed: int = 104
     return estimates[int(0.025 * samples)], estimates[min(samples - 1, int(0.975 * samples))]
 
 
+def finite_or_none(value: float) -> float | None:
+    return value if math.isfinite(value) else None
+
+
 def exact_mcnemar_pvalue(baseline_only_failure: int, txnguard_only_failure: int) -> float:
     discordant = baseline_only_failure + txnguard_only_failure
     if discordant == 0:
@@ -211,12 +215,12 @@ def analyze(output_dir: Path) -> dict[str, Any]:
     paired = {
         "comparison": "txnguard_minus_naive_severe_violation",
         "pairs": len(paired_diffs),
-        "risk_difference": mean(paired_diffs),
-        "ci95_low": low,
-        "ci95_high": high,
+        "risk_difference": finite_or_none(mean(paired_diffs)),
+        "ci95_low": finite_or_none(low),
+        "ci95_high": finite_or_none(high),
     }
     with (analysis_dir / "paired_effect.json").open("w", encoding="utf-8") as handle:
-        json.dump(paired, handle, indent=2, sort_keys=True)
+        json.dump(paired, handle, indent=2, sort_keys=True, allow_nan=False)
 
     paired_comparisons = []
     for baseline in ["naive", "occ", "serial"]:
@@ -238,9 +242,9 @@ def analyze(output_dir: Path) -> dict[str, Any]:
             {
                 "baseline": baseline,
                 "pairs": complete_pairs,
-                "risk_difference": mean(differences),
-                "ci95_low": comparison_low,
-                "ci95_high": comparison_high,
+                "risk_difference": finite_or_none(mean(differences)),
+                "ci95_low": finite_or_none(comparison_low),
+                "ci95_high": finite_or_none(comparison_high),
                 "baseline_only_failure": baseline_only_failure,
                 "txnguard_only_failure": txnguard_only_failure,
                 "mcnemar_exact_p": exact_mcnemar_pvalue(
@@ -268,17 +272,15 @@ def analyze(output_dir: Path) -> dict[str, Any]:
             f"- {row['policy']}: success={row['task_success_rate']:.3f}, "
             f"severe violations={row['severe_violation_rate']:.3f}, runs={row['runs']}"
         )
-    report.extend(
-        [
-            "",
-            "## Paired engineering comparison",
-            "",
+    report.extend(["", "## Paired engineering comparison", ""])
+    if paired_diffs:
+        report.append(
             f"TxnGuard minus naive severe-violation risk difference: {paired['risk_difference']:.3f} "
-            f"(95% paired bootstrap interval {low:.3f} to {high:.3f}; {paired['pairs']} pairs).",
-            "",
-            result_scope_note(output_dir),
-        ]
-    )
+            f"(95% paired bootstrap interval {low:.3f} to {high:.3f}; {paired['pairs']} pairs)."
+        )
+    else:
+        report.append("Not estimable: this artifact contains no paired TxnGuard and naive runs.")
+    report.extend(["", result_scope_note(output_dir)])
     (analysis_dir / "report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
     return {
         "runs": len(rows),

@@ -1,6 +1,6 @@
 import json
 
-from txnagentbench.analysis import exact_mcnemar_pvalue, result_scope_note
+from txnagentbench.analysis import exact_mcnemar_pvalue, finite_or_none, result_scope_note
 
 
 def write_config(tmp_path, stage, provider):
@@ -25,3 +25,9 @@ def test_exact_mcnemar_known_cases():
     assert exact_mcnemar_pvalue(1, 0) == 1.0
     assert exact_mcnemar_pvalue(5, 0) == 0.0625
     assert exact_mcnemar_pvalue(3, 3) == 1.0
+
+
+def test_nonfinite_results_are_strict_json_nulls():
+    assert finite_or_none(float("nan")) is None
+    assert finite_or_none(float("inf")) is None
+    assert finite_or_none(-0.25) == -0.25
