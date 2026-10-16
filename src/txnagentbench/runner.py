@@ -36,7 +36,10 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("Contention levels must be between 0 and 100.")
     if any(int(value) < 1 for value in config["agent_counts"]):
         raise ValueError("Agent counts must be positive.")
-    unknown_faults = sorted(set(config.get("fault_modes", ["none"])) - {"none", "duplicate_effect"})
+    unknown_faults = sorted(
+        set(config.get("fault_modes", ["none"]))
+        - {"none", "duplicate_effect", "dependency_change"}
+    )
     if unknown_faults:
         raise ValueError(f"Unknown fault modes: {', '.join(unknown_faults)}")
     if config["stage"] in {"model-smoke", "model_smoke", "pilot", "primary"}:
@@ -124,6 +127,14 @@ def environment_manifest() -> dict[str, Any]:
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
     }
     try:
+        manifest["git_dirty"] = bool(
+            subprocess.check_output(
+                ["git", "status", "--porcelain"], stderr=subprocess.DEVNULL, text=True
+            ).strip()
+        )
+    except (OSError, subprocess.CalledProcessError):
+        manifest["git_dirty"] = None
+    try:
         manifest["nvidia_smi"] = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"],
             text=True,
@@ -162,6 +173,7 @@ def run_matrix(
 ) -> dict[str, int]:
     config = load_config(config_path)
     rows = expand_matrix(config)
+    current_environment = environment_manifest()
     if config.get("stage") == "primary":
         if any(model.get("provider") == "scripted" for model in config["models"]):
             raise RuntimeError("Primary experiments cannot use scripted agents.")
@@ -170,9 +182,27 @@ def run_matrix(
     elif not allow_scripted and any(model.get("provider") == "scripted" for model in config["models"]):
         raise RuntimeError("Pass --allow-scripted for engineering-only smoke tests.")
 
+    if config.get("stage") in {"model-smoke", "model_smoke", "pilot", "primary"} and current_environment.get(
+        "git_dirty"
+    ):
+        raise RuntimeError("Model experiments require a clean Git worktree.")
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    atomic_json(output_dir / "environment.json", environment_manifest())
-    atomic_json(output_dir / "frozen_config.json", config)
+    frozen_path = output_dir / "frozen_config.json"
+    environment_path = output_dir / "environment.json"
+    has_completed_runs = any((output_dir / "runs").glob("*/summary.json"))
+    if frozen_path.exists():
+        existing_config = load_config(frozen_path)
+        if existing_config != config:
+            raise RuntimeError("Output directory contains a different frozen configuration.")
+    if environment_path.exists() and has_completed_runs:
+        existing_environment = load_config(environment_path)
+        if existing_environment.get("git_commit") != current_environment.get("git_commit"):
+            raise RuntimeError(
+                "Output directory contains runs from a different Git commit; use a new output directory."
+            )
+    atomic_json(environment_path, current_environment)
+    atomic_json(frozen_path, config)
     counts = {"planned": len(rows), "completed": 0, "skipped": 0, "failed": 0}
     current_name: str | None = None
     model_instance = None

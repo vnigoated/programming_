@@ -30,6 +30,10 @@ txnagentbench run --config configs/domain_smoke.json --output artifacts/domain-s
 txnagentbench validate --output artifacts/domain-smoke
 ```
 
+Run the full CPU-only diversity gate with `scripts/run_engineering_gates.sh` on Linux/Colab or
+`scripts/run_engineering_gates.ps1` on Windows. It covers four scenario families, two agent counts,
+three contention levels, two schedules, and normal plus duplicate-effect delivery.
+
 Re-running the same command skips completed run IDs. Delete a single run directory only when intentionally rerunning that exact cell.
 
 ## Colab setup
@@ -63,6 +67,8 @@ artifacts/<stage>/
     policy_metrics.csv
     domain_policy_metrics.csv
     fault_policy_metrics.csv
+    run_table.csv
+    paired_comparisons.csv
     paired_effect.json
     report.md
 ```

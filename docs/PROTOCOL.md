@@ -75,6 +75,10 @@ and deployment against the wrong dependency generation.
   same idempotency key, modeling at-least-once delivery after an ambiguous acknowledgement. Serial
   execution and OCC do not inherently deduplicate this external replay. TxnGuard's effect ledger
   must suppress it. The trace records both the replay attempt and whether delivery occurred.
+- `dependency_change`: after parallel agents observe cloud state but before they commit, the cloud
+  dependency generation advances and the resource version changes. Naive execution may deploy
+  against the obsolete generation; version-validating policies must refresh or reject. Other
+  domains treat this fault as a paired no-op control.
 
 Additional crash points must be added before the primary freeze. Fault injection is deterministic
 and paired across policies; it must never depend on an observed treatment result.

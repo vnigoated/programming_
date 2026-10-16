@@ -57,13 +57,13 @@ def test_domain_observations_and_tasks_are_not_aliases():
     assert "dependency_generation" in observations["cloud"]
 
 
-def test_scenario_seed_changes_run_identity_and_support_amount():
+def test_scenario_seed_changes_run_identity_and_support_capacity():
     first = RunSpec("support", "serial", 2, 100, "scripted-v1", 0, 0)
     second = RunSpec("support", "serial", 2, 100, "scripted-v1", 0, 1)
     assert first.run_id != second.run_id
-    assert build_environment("support", 2, 100, 0).task(0)["amount"] != build_environment(
+    assert build_environment("support", 2, 100, 0).observe(0)["capacity"] != build_environment(
         "support", 2, 100, 1
-    ).task(0)["amount"]
+    ).observe(0)["capacity"]
 
 
 class WrongAmountModel:
@@ -208,8 +208,10 @@ def test_oracles_reject_constructed_invalid_histories():
             "effect": "deployment",
             "pool_id": pool_id,
             "deployment_id": "bad-generation",
+            "amount_units": 1,
             "dependency_generation": cloud.pools[pool_id]["dependency_generation"] - 1,
             "idempotency_key": "corrupt",
+            "baseline": False,
         }
     )
     oracle = cloud.score()
@@ -220,3 +222,40 @@ def test_oracles_reject_constructed_invalid_histories():
 def test_fresh_domain_states_pass_all_oracles():
     for domain in DOMAINS:
         assert build_environment(domain, 2, 100).score().severe is False
+
+
+def test_scenario_families_include_valid_rejections_and_multi_fit_capacity():
+    for domain in ["inventory", "support", "cloud"]:
+        two_fit = build_environment(domain, 2, 100, scenario_seed=1)
+        assert two_fit.successful_action_capacity() == 2
+        exhausted = build_environment(domain, 2, 100, scenario_seed=3)
+        assert exhausted.successful_action_capacity() == 0
+        assert exhausted.observe(0)["available"] == 0
+    prebooked = build_environment("calendar", 2, 100, scenario_seed=3)
+    assert prebooked.successful_action_capacity() == 0
+    assert prebooked.observe(0)["available"] == 0
+
+
+def test_cloud_dependency_change_is_detected_and_versioned_policies_recover():
+    naive_spec = RunSpec(
+        "cloud", "naive", 2, 100, "scripted-v1", 0, 0, "dependency_change"
+    )
+    naive, naive_trace = run_benchmark(naive_spec, ScriptedDecisionModel())
+    assert naive["dependency_violation"] is True
+    assert any(event["event"] == "dependency_change" for event in naive_trace)
+
+    for scenario_seed in range(4):
+        for policy in ["serial", "occ", "txnguard"]:
+            spec = RunSpec(
+                "cloud",
+                policy,
+                2,
+                100,
+                "scripted-v1",
+                0,
+                scenario_seed,
+                "dependency_change",
+            )
+            row, _ = run_benchmark(spec, ScriptedDecisionModel())
+            assert row["dependency_violation"] is False
+            assert row["task_success"] is True

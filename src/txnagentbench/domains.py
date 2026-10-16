@@ -18,6 +18,32 @@ def assigned_key(prefix: str, agent: int, agent_count: int, contention: int) -> 
 
 
 @dataclass(frozen=True)
+class CapacityProfile:
+    family: str
+    capacity: int
+    initial: int
+    request: int
+
+
+def capacity_profile(scenario_seed: int) -> CapacityProfile:
+    profiles = (
+        CapacityProfile("scarce", capacity=1, initial=0, request=1),
+        CapacityProfile("two-fit", capacity=2, initial=0, request=1),
+        CapacityProfile("partially-allocated", capacity=3, initial=1, request=2),
+        CapacityProfile("exhausted", capacity=1, initial=1, request=1),
+    )
+    return profiles[scenario_seed % len(profiles)]
+
+
+def assigned_agent_counts(prefix: str, agent_count: int, contention: int) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for agent in range(agent_count):
+        key = assigned_key(prefix, agent, agent_count, contention)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+@dataclass(frozen=True)
 class OracleResult:
     invariant_violations: list[str]
     side_effect_violations: list[str]
@@ -82,17 +108,41 @@ class DomainEnvironment(ABC):
         """Replay an at-least-once effect. Return true when another effect is delivered."""
         ...
 
+    def inject_fault(self, fault_mode: str) -> list[dict[str, Any]]:
+        return []
+
 
 class InventoryEnvironment(DomainEnvironment):
     name = "inventory"
 
     def __init__(self, agent_count: int, contention: int, scenario_seed: int):
         super().__init__(agent_count, contention, scenario_seed)
+        self.profile = capacity_profile(scenario_seed)
+        self.agent_counts = assigned_agent_counts("sku", agent_count, contention)
         self.items: dict[str, dict[str, int]] = {}
         self.shipments: list[dict[str, Any]] = []
         for agent in range(agent_count):
             sku = assigned_key("sku", agent, agent_count, contention)
-            self.items.setdefault(sku, {"stock": 1, "reserved": 0, "version": 0})
+            self.items.setdefault(
+                sku,
+                {
+                    "stock": self.profile.capacity,
+                    "reserved": self.profile.initial,
+                    "version": 0,
+                },
+            )
+        for sku in self.items:
+            if self.profile.initial:
+                self.shipments.append(
+                    {
+                        "effect": "shipment",
+                        "sku": sku,
+                        "order_id": f"baseline-{sku}",
+                        "amount": self.profile.initial,
+                        "idempotency_key": f"baseline:{sku}",
+                        "baseline": True,
+                    }
+                )
 
     def _key(self, agent: int) -> str:
         return assigned_key("sku", agent, self.agent_count, self.contention)
@@ -108,15 +158,17 @@ class InventoryEnvironment(DomainEnvironment):
             "capacity": state["stock"],
             "allocated": state["reserved"],
             "available": state["stock"] - state["reserved"],
+            "scenario_family": self.profile.family,
             "version": state["version"],
         }
 
     def task(self, agent: int) -> dict[str, Any]:
         return {
             "action": "reserve_inventory",
-            "amount": 1,
+            "amount": self.profile.request,
             "domain": self.name,
             "order_id": f"order-{agent}",
+            "scenario_family": self.profile.family,
         }
 
     def is_stale(self, observation: dict[str, Any]) -> bool:
@@ -136,7 +188,9 @@ class InventoryEnvironment(DomainEnvironment):
             "effect": "shipment",
             "sku": observation["sku"],
             "order_id": f"order-{agent}",
+            "amount": amount,
             "idempotency_key": idempotency_key,
+            "baseline": False,
         }
         if not guarded or not any(x["idempotency_key"] == idempotency_key for x in self.shipments):
             self.shipments.append(effect)
@@ -144,21 +198,27 @@ class InventoryEnvironment(DomainEnvironment):
 
     def score(self) -> OracleResult:
         invariant = [key for key, state in self.items.items() if state["reserved"] > state["stock"]]
-        effect_counts = {key: 0 for key in self.items}
+        effect_totals = {key: 0 for key in self.items}
         for effect in self.shipments:
-            effect_counts[effect["sku"]] += 1
-        side = [key for key, count in effect_counts.items() if count > self.items[key]["stock"]]
-        lost = [key for key, count in effect_counts.items() if count != self.items[key]["reserved"]]
+            effect_totals[effect["sku"]] += effect["amount"]
+        side = [key for key, total in effect_totals.items() if total > self.items[key]["stock"]]
+        lost = [key for key, total in effect_totals.items() if total != self.items[key]["reserved"]]
         return OracleResult(invariant, side, lost, [])
 
     def final_state(self) -> dict[str, Any]:
         return {"items": self.items, "shipments": self.shipments}
 
     def successful_action_capacity(self) -> int:
-        return sum(state["stock"] for state in self.items.values())
+        return sum(
+            min(
+                self.agent_counts[key],
+                (state["stock"] - self.profile.initial) // self.profile.request,
+            )
+            for key, state in self.items.items()
+        )
 
     def side_effect_count(self) -> int:
-        return len(self.shipments)
+        return sum(not effect.get("baseline", False) for effect in self.shipments)
 
     def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
         effect = next(x for x in self.shipments if x["idempotency_key"] == idempotency_key)
@@ -173,12 +233,33 @@ class CalendarEnvironment(DomainEnvironment):
 
     def __init__(self, agent_count: int, contention: int, scenario_seed: int):
         super().__init__(agent_count, contention, scenario_seed)
+        self.scenario_family = (
+            "prebooked" if scenario_seed % 4 == 3 else ("long-meeting" if scenario_seed % 4 == 2 else "open-slot")
+        )
+        self.duration_minutes = (30, 45, 60, 30)[scenario_seed % 4]
+        self.agent_counts = assigned_agent_counts(
+            f"room-{9 + scenario_seed % 8:02d}00", agent_count, contention
+        )
         self.slots: dict[str, dict[str, Any]] = {}
+        self.initial_bookings: dict[str, int] = {}
         self.invitations: list[dict[str, Any]] = []
         hour = 9 + scenario_seed % 8
         for agent in range(agent_count):
             slot = assigned_key(f"room-{hour:02d}00", agent, agent_count, contention)
-            self.slots.setdefault(slot, {"booking_ids": [], "version": 0})
+            initial = [f"baseline-{slot}"] if self.scenario_family == "prebooked" else []
+            self.slots.setdefault(slot, {"booking_ids": initial, "version": 0})
+            self.initial_bookings[slot] = len(initial)
+        for slot, state in self.slots.items():
+            if state["booking_ids"]:
+                self.invitations.append(
+                    {
+                        "effect": "invitation",
+                        "slot_id": slot,
+                        "meeting_id": state["booking_ids"][0],
+                        "idempotency_key": f"baseline:{slot}",
+                        "baseline": True,
+                    }
+                )
 
     def _key(self, agent: int) -> str:
         hour = 9 + self.scenario_seed % 8
@@ -194,6 +275,8 @@ class CalendarEnvironment(DomainEnvironment):
             "capacity": 1,
             "allocated": len(state["booking_ids"]),
             "available": 1 - len(state["booking_ids"]),
+            "duration_minutes": self.duration_minutes,
+            "scenario_family": self.scenario_family,
             "version": state["version"],
         }
 
@@ -203,6 +286,8 @@ class CalendarEnvironment(DomainEnvironment):
             "amount": 1,
             "domain": self.name,
             "meeting_id": f"meeting-{agent}",
+            "duration_minutes": self.duration_minutes,
+            "scenario_family": self.scenario_family,
         }
 
     def is_stale(self, observation: dict[str, Any]) -> bool:
@@ -224,6 +309,7 @@ class CalendarEnvironment(DomainEnvironment):
             "slot_id": observation["slot_id"],
             "meeting_id": f"meeting-{agent}",
             "idempotency_key": idempotency_key,
+            "baseline": False,
         }
         if not guarded or not any(x["idempotency_key"] == idempotency_key for x in self.invitations):
             self.invitations.append(effect)
@@ -246,10 +332,13 @@ class CalendarEnvironment(DomainEnvironment):
         return {"slots": self.slots, "invitations": self.invitations}
 
     def successful_action_capacity(self) -> int:
-        return len(self.slots)
+        return sum(
+            min(self.agent_counts[key], 1 - self.initial_bookings[key])
+            for key, state in self.slots.items()
+        )
 
     def side_effect_count(self) -> int:
-        return len(self.invitations)
+        return sum(not effect.get("baseline", False) for effect in self.invitations)
 
     def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
         effect = next(x for x in self.invitations if x["idempotency_key"] == idempotency_key)
@@ -264,7 +353,12 @@ class SupportEnvironment(DomainEnvironment):
 
     def __init__(self, agent_count: int, contention: int, scenario_seed: int):
         super().__init__(agent_count, contention, scenario_seed)
-        self.refund_cents = [2500, 5000, 7500][scenario_seed % 3]
+        self.profile = capacity_profile(scenario_seed)
+        self.unit_cents = 2500
+        self.refund_cents = self.profile.request * self.unit_cents
+        self.eligible_cents = self.profile.capacity * self.unit_cents
+        self.initial_refunded_cents = self.profile.initial * self.unit_cents
+        self.agent_counts = assigned_agent_counts("case", agent_count, contention)
         self.cases: dict[str, dict[str, int]] = {}
         self.refunds: list[dict[str, Any]] = []
         self.notifications: list[dict[str, Any]] = []
@@ -272,8 +366,32 @@ class SupportEnvironment(DomainEnvironment):
             case_id = assigned_key("case", agent, agent_count, contention)
             self.cases.setdefault(
                 case_id,
-                {"eligible_cents": self.refund_cents, "refunded_cents": 0, "version": 0},
+                {
+                    "eligible_cents": self.eligible_cents,
+                    "refunded_cents": self.initial_refunded_cents,
+                    "version": 0,
+                },
             )
+        for case_id in self.cases:
+            if self.initial_refunded_cents:
+                key = f"baseline:{case_id}"
+                self.refunds.append(
+                    {
+                        "effect": "refund",
+                        "case_id": case_id,
+                        "amount_cents": self.initial_refunded_cents,
+                        "idempotency_key": key,
+                        "baseline": True,
+                    }
+                )
+                self.notifications.append(
+                    {
+                        "effect": "refund_notification",
+                        "case_id": case_id,
+                        "idempotency_key": key,
+                        "baseline": True,
+                    }
+                )
 
     def _key(self, agent: int) -> str:
         return assigned_key("case", agent, self.agent_count, self.contention)
@@ -289,6 +407,7 @@ class SupportEnvironment(DomainEnvironment):
             "capacity": state["eligible_cents"],
             "allocated": state["refunded_cents"],
             "available": state["eligible_cents"] - state["refunded_cents"],
+            "scenario_family": self.profile.family,
             "version": state["version"],
         }
 
@@ -298,6 +417,7 @@ class SupportEnvironment(DomainEnvironment):
             "amount": self.refund_cents,
             "domain": self.name,
             "case_id": self._key(agent),
+            "scenario_family": self.profile.family,
         }
 
     def is_stale(self, observation: dict[str, Any]) -> bool:
@@ -322,11 +442,13 @@ class SupportEnvironment(DomainEnvironment):
             "case_id": observation["case_id"],
             "amount_cents": amount,
             "idempotency_key": idempotency_key,
+            "baseline": False,
         }
         notice = {
             "effect": "refund_notification",
             "case_id": observation["case_id"],
             "idempotency_key": idempotency_key,
+            "baseline": False,
         }
         if not guarded or not any(x["idempotency_key"] == idempotency_key for x in self.refunds):
             self.refunds.append(refund)
@@ -361,10 +483,16 @@ class SupportEnvironment(DomainEnvironment):
         return {"cases": self.cases, "refunds": self.refunds, "notifications": self.notifications}
 
     def successful_action_capacity(self) -> int:
-        return len(self.cases)
+        return sum(
+            min(
+                self.agent_counts[key],
+                (state["eligible_cents"] - self.initial_refunded_cents) // self.refund_cents,
+            )
+            for key, state in self.cases.items()
+        )
 
     def side_effect_count(self) -> int:
-        return len(self.refunds)
+        return sum(not effect.get("baseline", False) for effect in self.refunds)
 
     def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
         refund = next(x for x in self.refunds if x["idempotency_key"] == idempotency_key)
@@ -381,6 +509,8 @@ class CloudEnvironment(DomainEnvironment):
 
     def __init__(self, agent_count: int, contention: int, scenario_seed: int):
         super().__init__(agent_count, contention, scenario_seed)
+        self.profile = capacity_profile(scenario_seed)
+        self.agent_counts = assigned_agent_counts("quota", agent_count, contention)
         self.pools: dict[str, dict[str, Any]] = {}
         self.deployments: list[dict[str, Any]] = []
         self.dependency_generation = 10 + scenario_seed
@@ -389,13 +519,26 @@ class CloudEnvironment(DomainEnvironment):
             self.pools.setdefault(
                 pool,
                 {
-                    "quota_units": 1,
-                    "used_units": 0,
-                    "dependency_ready": True,
+                    "quota_units": self.profile.capacity,
+                    "used_units": self.profile.initial,
+                    "dependency_ready": self.profile.family != "exhausted",
                     "dependency_generation": self.dependency_generation,
                     "version": 0,
                 },
             )
+        for pool in self.pools:
+            if self.profile.initial:
+                self.deployments.append(
+                    {
+                        "effect": "deployment",
+                        "pool_id": pool,
+                        "deployment_id": f"baseline-{pool}",
+                        "amount_units": self.profile.initial,
+                        "dependency_generation": self.dependency_generation,
+                        "idempotency_key": f"baseline:{pool}",
+                        "baseline": True,
+                    }
+                )
 
     def _key(self, agent: int) -> str:
         return assigned_key("quota", agent, self.agent_count, self.contention)
@@ -413,15 +556,17 @@ class CloudEnvironment(DomainEnvironment):
             "capacity": state["quota_units"],
             "allocated": state["used_units"],
             "available": state["quota_units"] - state["used_units"],
+            "scenario_family": self.profile.family,
             "version": state["version"],
         }
 
     def task(self, agent: int) -> dict[str, Any]:
         return {
             "action": "deploy_service",
-            "amount": 1,
+            "amount": self.profile.request,
             "domain": self.name,
             "deployment_id": f"deployment-{agent}",
+            "scenario_family": self.profile.family,
         }
 
     def is_stale(self, observation: dict[str, Any]) -> bool:
@@ -446,7 +591,9 @@ class CloudEnvironment(DomainEnvironment):
             "pool_id": observation["pool_id"],
             "deployment_id": f"deployment-{agent}",
             "dependency_generation": observation["dependency_generation"],
+            "amount_units": amount,
             "idempotency_key": idempotency_key,
+            "baseline": False,
         }
         if not guarded or not any(x["idempotency_key"] == idempotency_key for x in self.deployments):
             self.deployments.append(effect)
@@ -456,23 +603,24 @@ class CloudEnvironment(DomainEnvironment):
         invariant = [
             key for key, state in self.pools.items() if state["used_units"] > state["quota_units"]
         ]
-        deployment_counts = {key: 0 for key in self.pools}
+        deployment_totals = {key: 0 for key in self.pools}
         for effect in self.deployments:
-            deployment_counts[effect["pool_id"]] += 1
+            deployment_totals[effect["pool_id"]] += effect["amount_units"]
         side = [
             key
-            for key, count in deployment_counts.items()
-            if count > self.pools[key]["quota_units"]
+            for key, total in deployment_totals.items()
+            if total > self.pools[key]["quota_units"]
         ]
         lost = [
             key
-            for key, count in deployment_counts.items()
-            if count != self.pools[key]["used_units"]
+            for key, total in deployment_totals.items()
+            if total != self.pools[key]["used_units"]
         ]
         dependency = [
             effect["deployment_id"]
             for effect in self.deployments
-            if effect["dependency_generation"]
+            if not effect.get("baseline", False)
+            and effect["dependency_generation"]
             != self.pools[effect["pool_id"]]["dependency_generation"]
         ]
         return OracleResult(invariant, side, lost, dependency)
@@ -481,10 +629,18 @@ class CloudEnvironment(DomainEnvironment):
         return {"quota_pools": self.pools, "deployments": self.deployments}
 
     def successful_action_capacity(self) -> int:
-        return sum(state["quota_units"] for state in self.pools.values())
+        if self.profile.family == "exhausted":
+            return 0
+        return sum(
+            min(
+                self.agent_counts[key],
+                (state["quota_units"] - self.profile.initial) // self.profile.request,
+            )
+            for key, state in self.pools.items()
+        )
 
     def side_effect_count(self) -> int:
-        return len(self.deployments)
+        return sum(not effect.get("baseline", False) for effect in self.deployments)
 
     def replay_effect(self, idempotency_key: str, guarded: bool) -> bool:
         effect = next(x for x in self.deployments if x["idempotency_key"] == idempotency_key)
@@ -492,6 +648,23 @@ class CloudEnvironment(DomainEnvironment):
             return False
         self.deployments.append(dict(effect))
         return True
+
+    def inject_fault(self, fault_mode: str) -> list[dict[str, Any]]:
+        if fault_mode != "dependency_change":
+            return []
+        events = []
+        for pool_id, state in self.pools.items():
+            state["dependency_generation"] += 1
+            state["version"] += 1
+            events.append(
+                {
+                    "event": "dependency_change",
+                    "resource_id": pool_id,
+                    "dependency_generation": state["dependency_generation"],
+                    "version": state["version"],
+                }
+            )
+        return events
 
 
 DOMAIN_TYPES: dict[str, type[DomainEnvironment]] = {

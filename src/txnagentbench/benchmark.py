@@ -41,7 +41,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
         )
     if spec.policy not in {"serial", "naive", "occ", "txnguard"}:
         raise ValueError(f"Unknown policy: {spec.policy}")
-    if spec.fault_mode not in {"none", "duplicate_effect"}:
+    if spec.fault_mode not in {"none", "duplicate_effect", "dependency_change"}:
         raise ValueError(f"Unknown fault mode: {spec.fault_mode}")
 
     environment = build_environment(
@@ -73,6 +73,8 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
         for agent in order:
             snapshots[agent] = observe(agent)
         execution = [(agent, snapshots[agent]) for agent in order]
+
+    trace.extend(environment.inject_fault(spec.fault_mode))
 
     for agent, observation in execution:
         if observation is None:

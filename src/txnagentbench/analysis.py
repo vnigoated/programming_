@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import random
 import statistics
 from collections import defaultdict
@@ -51,12 +52,57 @@ def bootstrap_interval(values: list[float], samples: int = 2000, seed: int = 104
     return estimates[int(0.025 * samples)], estimates[min(samples - 1, int(0.975 * samples))]
 
 
+def exact_mcnemar_pvalue(baseline_only_failure: int, txnguard_only_failure: int) -> float:
+    discordant = baseline_only_failure + txnguard_only_failure
+    if discordant == 0:
+        return 1.0
+    tail = min(baseline_only_failure, txnguard_only_failure)
+    probability = sum(math.comb(discordant, value) for value in range(tail + 1)) / (2**discordant)
+    return min(1.0, 2.0 * probability)
+
+
 def analyze(output_dir: Path) -> dict[str, Any]:
     rows = load_summaries(output_dir)
     analysis_dir = output_dir / "analysis"
     analysis_dir.mkdir(parents=True, exist_ok=True)
     if not rows:
         raise RuntimeError("No completed summaries found.")
+
+    run_fields = [
+        "run_id",
+        "domain",
+        "policy",
+        "agent_count",
+        "contention",
+        "scenario_seed",
+        "schedule_seed",
+        "fault_mode",
+        "model_name",
+        "model_revision",
+        "prompt_version",
+        "quantization",
+        "accepted",
+        "rejected",
+        "conflicts",
+        "invalid_actions",
+        "unsafe_proposals",
+        "task_success",
+        "invariant_violation",
+        "side_effect_violation",
+        "lost_update",
+        "dependency_violation",
+        "severe_violation",
+        "input_tokens",
+        "output_tokens",
+        "model_latency_seconds",
+        "duration_seconds",
+        "side_effect_count",
+    ]
+    with (analysis_dir / "run_table.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=run_fields)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field) for field in run_fields})
 
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -172,6 +218,43 @@ def analyze(output_dir: Path) -> dict[str, Any]:
     with (analysis_dir / "paired_effect.json").open("w", encoding="utf-8") as handle:
         json.dump(paired, handle, indent=2, sort_keys=True)
 
+    paired_comparisons = []
+    for baseline in ["naive", "occ", "serial"]:
+        differences = []
+        baseline_only_failure = 0
+        txnguard_only_failure = 0
+        complete_pairs = 0
+        for policies in by_key.values():
+            if "txnguard" not in policies or baseline not in policies:
+                continue
+            complete_pairs += 1
+            guard_failure = bool(policies["txnguard"]["severe_violation"])
+            baseline_failure = bool(policies[baseline]["severe_violation"])
+            differences.append(float(guard_failure) - float(baseline_failure))
+            baseline_only_failure += int(baseline_failure and not guard_failure)
+            txnguard_only_failure += int(guard_failure and not baseline_failure)
+        comparison_low, comparison_high = bootstrap_interval(differences)
+        paired_comparisons.append(
+            {
+                "baseline": baseline,
+                "pairs": complete_pairs,
+                "risk_difference": mean(differences),
+                "ci95_low": comparison_low,
+                "ci95_high": comparison_high,
+                "baseline_only_failure": baseline_only_failure,
+                "txnguard_only_failure": txnguard_only_failure,
+                "mcnemar_exact_p": exact_mcnemar_pvalue(
+                    baseline_only_failure, txnguard_only_failure
+                ),
+            }
+        )
+    with (analysis_dir / "paired_comparisons.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(paired_comparisons[0]))
+        writer.writeheader()
+        writer.writerows(paired_comparisons)
+
     report = [
         "# TxnAgentBench analysis",
         "",
@@ -203,5 +286,6 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         "domain_policy_metrics": domain_policy_rows,
         "fault_policy_metrics": fault_policy_rows,
         "paired": paired,
+        "paired_comparisons": paired_comparisons,
     }
 

@@ -57,3 +57,17 @@ def test_legacy_run_identity_omits_new_default_dimensions():
     assert "scenario_seed" not in identity
     assert "fault_mode" not in identity
     assert run_id == "9144bd30b75e1a508d16"
+
+
+def test_resume_rejects_changed_frozen_config(tmp_path):
+    output = make_artifact(tmp_path)
+    changed = dict(CONFIG)
+    changed["schedule_seeds"] = [0, 1]
+    changed_path = tmp_path / "changed.json"
+    changed_path.write_text(json.dumps(changed), encoding="utf-8")
+    try:
+        run_matrix(changed_path, output, allow_scripted=True)
+    except RuntimeError as exc:
+        assert "different frozen configuration" in str(exc)
+    else:
+        raise AssertionError("Resume accepted a changed configuration")
