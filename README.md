@@ -1,10 +1,12 @@
-# TxnAgentBench Colab Experiment Scaffold
+# TxnAgentBench experiment scaffold
 
 This repository is a restart-safe engineering scaffold for the TxnAgentBench study. The included scripted-agent benchmark validates the scheduler, policy interface, trace format, oracles, checkpointing, and analysis. Scripted-agent results are not research findings.
 
 ## What is runnable now
 
-- Four domain labels with a controlled shared-resource scenario
+- Four independent in-memory domain simulators for inventory, calendar, support, and cloud
+- Domain-specific observations, actions, state transitions, side effects, and correctness oracles
+- Independent scenario and schedule seeds
 - Serial, naive parallel, optimistic concurrency, and TxnGuard reference policies
 - Deterministic schedule seeds
 - Immutable per-run JSONL traces
@@ -13,7 +15,7 @@ This repository is a restart-safe engineering scaffold for the TxnAgentBench stu
 - Optional Hugging Face Transformers model adapter
 - A primary-study gate that rejects scripted models and stops at the unimplemented CoAgent adapter
 
-The domain logic is intentionally minimal. Before the TMLR experiment, each domain must receive its own realistic schema, tools, invariants, and side-effect simulator. PostgreSQL serializable isolation and a faithful CoAgent adapter must also replace the engineering placeholders.
+The domain simulators validate benchmark semantics, but they are not yet primary-study environments. Before the TMLR experiment, they need broader scenario families, retry/crash injection, adversarial histories, and human oracle validation. PostgreSQL serializable isolation and a faithful CoAgent adapter must also replace the engineering placeholders.
 
 ## Local verification
 
@@ -23,6 +25,7 @@ pytest -q
 txnagentbench plan --config configs/smoke.json
 txnagentbench run --config configs/smoke.json --output artifacts/smoke --allow-scripted
 txnagentbench analyze --output artifacts/smoke
+txnagentbench run --config configs/domain_smoke.json --output artifacts/domain-smoke --allow-scripted
 ```
 
 Re-running the same command skips completed run IDs. Delete a single run directory only when intentionally rerunning that exact cell.
@@ -35,8 +38,11 @@ Re-running the same command skips completed run IDs. Delete a single run directo
 4. Mount persistent storage.
 5. Clone the repository and run `scripts/bootstrap_colab.sh`.
 6. Run the scripted smoke test.
-7. Copy `pilot_template.json`, insert a real model ID and immutable revision, and run a small capped batch.
+7. Run the revision-locked real-model smoke configuration.
 8. Inspect traces before increasing the batch size.
+
+The experiment definitions and frozen decisions are in `docs/PROTOCOL.md`. Scripted domain-smoke
+results validate the oracles only and must not be reported as empirical findings.
 
 Do not launch the primary matrix until all publication gates in `docs/EXPERIMENT_RUNBOOK.md` pass.
 

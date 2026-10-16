@@ -4,6 +4,7 @@ import itertools
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -13,19 +14,54 @@ from .benchmark import RunSpec, run_benchmark
 from .models import build_model
 
 
+IMMUTABLE_REVISION = re.compile(r"[0-9a-fA-F]{40}")
+
+
+def validate_config(config: dict[str, Any]) -> None:
+    required = {
+        "stage",
+        "domains",
+        "policies",
+        "agent_counts",
+        "contention_levels",
+        "models",
+        "schedule_seeds",
+    }
+    missing = sorted(required - set(config))
+    if missing:
+        raise ValueError(f"Missing configuration fields: {', '.join(missing)}")
+    if not config["models"]:
+        raise ValueError("At least one model must be configured.")
+    if any(int(value) < 0 or int(value) > 100 for value in config["contention_levels"]):
+        raise ValueError("Contention levels must be between 0 and 100.")
+    if any(int(value) < 1 for value in config["agent_counts"]):
+        raise ValueError("Agent counts must be positive.")
+    if config["stage"] in {"model-smoke", "model_smoke", "pilot", "primary"}:
+        for model in config["models"]:
+            if model.get("provider") == "scripted":
+                continue
+            revision = str(model.get("revision", ""))
+            if not IMMUTABLE_REVISION.fullmatch(revision):
+                raise ValueError(
+                    f"Model {model.get('name', '<unnamed>')} must use a 40-character immutable revision."
+                )
+
+
 def load_config(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
 def expand_matrix(config: dict[str, Any]) -> list[tuple[RunSpec, dict[str, Any]]]:
+    validate_config(config)
     rows: list[tuple[RunSpec, dict[str, Any]]] = []
-    for domain, policy, agents, contention, model, seed in itertools.product(
+    for domain, policy, agents, contention, model, scenario_seed, schedule_seed in itertools.product(
         config["domains"],
         config["policies"],
         config["agent_counts"],
         config["contention_levels"],
         config["models"],
+        config.get("scenario_seeds", [0]),
         config["schedule_seeds"],
     ):
         spec = RunSpec(
@@ -34,7 +70,8 @@ def expand_matrix(config: dict[str, Any]) -> list[tuple[RunSpec, dict[str, Any]]
             agent_count=int(agents),
             contention=int(contention),
             model_name=model["name"],
-            schedule_seed=int(seed),
+            schedule_seed=int(schedule_seed),
+            scenario_seed=int(scenario_seed),
         )
         rows.append((spec, model))
     return sorted(rows, key=lambda item: (item[0].model_name, item[0].run_id))

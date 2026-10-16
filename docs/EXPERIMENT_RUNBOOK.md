@@ -23,6 +23,10 @@ Pass criteria:
 
 ## Stage 2 Domain implementation
 
+Current status: the first in-memory implementations and oracle tests exist. They are suitable for
+scripted engineering validation. Broader scenario families, injected retries/crashes, adversarial
+histories, and human oracle agreement remain publication gates.
+
 Replace the shared-resource demonstration with four independent applications:
 
 1. Inventory reservations with stock and shipment invariants.

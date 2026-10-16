@@ -71,6 +71,11 @@ def analyze(output_dir: Path) -> dict[str, Any]:
                 "severe_violation_rate": mean([float(x["severe_violation"]) for x in items]),
                 "lost_update_rate": mean([float(x["lost_update"]) for x in items]),
                 "side_effect_violation_rate": mean([float(x["side_effect_violation"]) for x in items]),
+                "dependency_violation_rate": mean(
+                    [float(x.get("dependency_violation", False)) for x in items]
+                ),
+                "invalid_action_rate": mean([float(x["invalid_actions"] > 0) for x in items]),
+                "mean_conflicts": mean([float(x["conflicts"]) for x in items]),
                 "median_duration_seconds": statistics.median(x["duration_seconds"] for x in items),
                 "mean_total_tokens": mean([x["input_tokens"] + x["output_tokens"] for x in items]),
             }
@@ -81,8 +86,38 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         writer.writeheader()
         writer.writerows(policy_rows)
 
+    domain_policy_rows = []
+    by_domain_policy: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_domain_policy[(row["domain"], row["policy"])].append(row)
+    for (domain, policy), items in sorted(by_domain_policy.items()):
+        domain_policy_rows.append(
+            {
+                "domain": domain,
+                "policy": policy,
+                "runs": len(items),
+                "task_success_rate": mean([float(x["task_success"]) for x in items]),
+                "severe_violation_rate": mean([float(x["severe_violation"]) for x in items]),
+                "lost_update_rate": mean([float(x["lost_update"]) for x in items]),
+                "side_effect_violation_rate": mean(
+                    [float(x["side_effect_violation"]) for x in items]
+                ),
+            }
+        )
+    with (analysis_dir / "domain_policy_metrics.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(domain_policy_rows[0]))
+        writer.writeheader()
+        writer.writerows(domain_policy_rows)
+
     pair_key = lambda row: (
-        row["domain"], row["agent_count"], row["contention"], row["model_name"], row["schedule_seed"]
+        row["domain"],
+        row["agent_count"],
+        row["contention"],
+        row["model_name"],
+        row.get("scenario_seed", 0),
+        row["schedule_seed"],
     )
     by_key: dict[tuple[Any, ...], dict[str, dict[str, Any]]] = defaultdict(dict)
     for row in rows:
@@ -130,5 +165,10 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         ]
     )
     (analysis_dir / "report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
-    return {"runs": len(rows), "policy_metrics": policy_rows, "paired": paired}
+    return {
+        "runs": len(rows),
+        "policy_metrics": policy_rows,
+        "domain_policy_metrics": domain_policy_rows,
+        "paired": paired,
+    }
 

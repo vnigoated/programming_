@@ -3,7 +3,7 @@
   "domains": ["inventory", "calendar", "support", "cloud"],
   "policies": ["serial", "naive", "occ", "txnguard"],
   "agent_counts": [2, 4],
-  "contention_levels": [0, 50, 75],
+  "contention_levels": [0, 100],
   "models": [
     {
       "name": "replace-with-model-a",
@@ -13,6 +13,7 @@
       "quantization": "bf16"
     }
   ],
+  "scenario_seeds": [0, 1],
   "schedule_seeds": [0, 1]
 }
 
