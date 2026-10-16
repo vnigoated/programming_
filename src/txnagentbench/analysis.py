@@ -121,7 +121,7 @@ def analyze(output_dir: Path) -> dict[str, Any]:
     report.extend(
         [
             "",
-            "## Primary engineering comparison",
+            "## Paired engineering comparison",
             "",
             f"TxnGuard minus naive severe-violation risk difference: {paired['risk_difference']:.3f} "
             f"(95% paired bootstrap interval {low:.3f} to {high:.3f}; {paired['pairs']} pairs).",
