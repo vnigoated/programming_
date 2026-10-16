@@ -59,15 +59,27 @@ class TransformersDecisionModel:
                 bnb_4bit_compute_dtype=torch.bfloat16,
             )
         else:
-            kwargs["torch_dtype"] = torch.bfloat16
+            kwargs["dtype"] = torch.bfloat16
         self.model = AutoModelForCausalLM.from_pretrained(model_id, **kwargs)
 
     def decide(self, observation: dict[str, Any], task: dict[str, Any]) -> Decision:
         system = (
-            "You are a tool-using agent. Return one JSON object only. "
-            "Valid actions are apply and reject. Do not include reasoning."
+            "You are an agent completing a resource-allocation task from one observed snapshot. "
+            "If allocated + requested amount is less than or equal to capacity, choose apply. "
+            "Otherwise choose reject. Use only the supplied observation; do not speculate about "
+            "other agents or future changes. Return exactly one JSON object with action and amount, "
+            "for example {\"action\":\"apply\",\"amount\":1}. Valid actions are apply and reject. "
+            "Do not include reasoning, Markdown, or additional text."
         )
-        user = json.dumps({"observation": observation, "task": task}, sort_keys=True)
+        user = json.dumps(
+            {
+                "observation": observation,
+                "requested_amount": int(task["amount"]),
+                "domain": task["domain"],
+                "instruction": "Fulfil the request when the observed capacity is sufficient.",
+            },
+            sort_keys=True,
+        )
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         if hasattr(self.tokenizer, "apply_chat_template"):
             prompt = self.tokenizer.apply_chat_template(
