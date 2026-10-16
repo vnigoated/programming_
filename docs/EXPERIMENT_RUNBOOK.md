@@ -62,6 +62,10 @@ txnagentbench analyze --output "$ARTIFACT_ROOT/domain-model-smoke"
 
 ## Stage 5 Blinded pilot
 
+Status: completed on 2026-10-16 with 128/128 valid runs. See `docs/PILOT_REPORT.md`. The pilot
+passed its engineering gates but exposed insufficient scenario heterogeneity, which must be fixed
+before primary freeze.
+
 Run approximately 100 scenario-schedule cells across the candidate policies. Estimate runtime, token use, paired disagreement, severe-violation rate, and infrastructure-failure rate. Use the pilot to calculate the number of final schedule seeds.
 
 Pilot data must be stored separately from the primary experiment and excluded from primary confirmatory estimates.
