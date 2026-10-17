@@ -23,3 +23,17 @@ def test_mistral_smoke_is_small_and_immutably_pinned():
     model = config["models"][0]
     assert model["model_id"] == "mistralai/Mistral-7B-Instruct-v0.3"
     assert model["revision"] == "c170c708c41dac9275d15a8fff4eca08d52bab71"
+
+
+def test_cross_model_ablation_gate_is_small_and_balanced():
+    config = load_config(Path("configs/cross_model_ablation_smoke.json"))
+    rows = expand_matrix(config)
+    assert len(rows) == 200
+    assert {model["name"] for model in config["models"]} == {
+        "qwen2.5-7b-instruct",
+        "mistral-7b-instruct-v0.3",
+    }
+    counts = {}
+    for spec, _ in rows:
+        counts[spec.policy] = counts.get(spec.policy, 0) + 1
+    assert set(counts.values()) == {40}

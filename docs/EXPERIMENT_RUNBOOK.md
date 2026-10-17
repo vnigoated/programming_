@@ -131,6 +131,9 @@ txnagentbench run --config configs/recovery_ablation_smoke.json \
 
 bash scripts/run_mistral_model_smoke.sh \
   /content/txnagentbench "$ARTIFACT_ROOT"
+
+bash scripts/run_cross_model_ablation_smoke.sh \
+  /content/txnagentbench "$ARTIFACT_ROOT"
 ```
 
 Combine frozen pilot blocks only into a separate, mutable analysis directory. Never write a new
