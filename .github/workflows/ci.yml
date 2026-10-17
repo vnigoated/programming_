@@ -43,3 +43,9 @@ jobs:
         env:
           TXNAGENTBENCH_POSTGRES_DSN: ${{ env.TXNAGENTBENCH_TEST_POSTGRES_DSN }}
       - run: txnagentbench validate --output artifacts/postgres-smoke-ci
+      - run: >-
+          txnagentbench run
+          --config configs/mtpo_smoke.json
+          --output artifacts/mtpo-smoke-ci
+          --allow-scripted
+      - run: txnagentbench validate --output artifacts/mtpo-smoke-ci

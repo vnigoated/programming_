@@ -30,6 +30,12 @@ artifact search on 2026-10-17 found no author-released code, dataset, immutable 
 artifact-availability statement. An independently written adapter therefore cannot truthfully be
 called the official or faithful CoAgent implementation.
 
-The defensible comparison is a clearly named `mtpo_reproduction`, implementing the published fixed
-rank, filtered-read trajectory, notification, semantic repair, inverse-operation, and reorder
-mechanisms. The paper must report that it is an independent reproduction and list every deviation.
+The implemented comparison is named `mtpo_reproduction`. It fixes rank at launch, records physical
+trajectory order, notifies agents whose premises changed, invokes the same model for semantic
+repair, reconciles operations in rank order, records inverse/reorder counts, and suppresses replayed
+effects using registered idempotency keys. Every summary records that it is not official author
+code.
+
+Important deviation: the synthetic environments are resettable, so quiescent reconciliation
+replays registered operations in rank order rather than performing arbitrary live-system saga
+inverses. The paper must report this deviation and use the name `mtpo_reproduction`, not `CoAgent`.
