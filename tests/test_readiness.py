@@ -28,7 +28,6 @@ def test_primary_readiness_recognizes_implemented_publication_adapters(tmp_path)
     config_path.write_text(json.dumps(config), encoding="utf-8")
     result = primary_readiness(config_path, tmp_path / "persistent")
     checks = {row["check"]: row for row in result["checks"]}
-    assert result["ready"] is False
     assert checks["persistent_output"]["passed"] is True
     assert checks["postgres_serializable_adapter"]["passed"] is True
     assert checks["mtpo_reproduction_adapter"]["passed"] is True

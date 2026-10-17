@@ -28,8 +28,8 @@ jobs:
     env:
       TXNAGENTBENCH_TEST_POSTGRES_DSN: postgresql://txnagentbench:txnagentbench-ci-only@127.0.0.1:5432/txnagentbench
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
