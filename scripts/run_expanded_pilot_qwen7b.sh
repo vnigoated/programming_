@@ -75,10 +75,77 @@ PY
     return
   fi
 
-  txnagentbench plan --config "$config"
-  txnagentbench run --config "$config" --output "$output"
-  txnagentbench validate --output "$output"
-  bash scripts/finalize_artifact.sh "$output"
+  local execution_dir="$PROJECT_DIR"
+  local compatibility_worktree=""
+
+  # A disconnected Colab session can leave a valid but unfinished block.  If
+  # that block began at an older commit, resume it from that exact commit in an
+  # isolated worktree.  Never rewrite environment.json and never mix commits
+  # inside one scientific block.
+  if [[ -f "$output/environment.json" ]]; then
+    local artifact_commit
+    artifact_commit="$(python - "$output/environment.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+environment = json.loads(Path(sys.argv[1]).read_text())
+print(environment["git_commit"])
+PY
+)"
+    if [[ "$artifact_commit" != "$current_commit" ]]; then
+      if ! git cat-file -e "$artifact_commit^{commit}" 2>/dev/null; then
+        echo "Partial block commit is unavailable locally: $artifact_commit" >&2
+        exit 2
+      fi
+      if ! git diff --quiet "$artifact_commit" "$current_commit" -- \
+        pyproject.toml src/txnagentbench "$config"; then
+        echo "Partial block differs in benchmark code or its frozen configuration." >&2
+        echo "Use a new pilot output root instead of mixing implementations." >&2
+        exit 2
+      fi
+
+      compatibility_worktree="/content/txnagentbench-compat-${artifact_commit:0:12}"
+      if [[ -e "$compatibility_worktree" ]]; then
+        if [[ ! -e "$compatibility_worktree/.git" ]] || \
+          [[ "$(git -C "$compatibility_worktree" rev-parse HEAD)" != "$artifact_commit" ]] || \
+          [[ -n "$(git -C "$compatibility_worktree" status --porcelain)" ]]; then
+          echo "Existing compatibility worktree is invalid: $compatibility_worktree" >&2
+          exit 2
+        fi
+        echo "Reusing compatibility worktree: $compatibility_worktree"
+      else
+        git worktree add --detach "$compatibility_worktree" "$artifact_commit"
+      fi
+      execution_dir="$compatibility_worktree"
+      echo "PASS: resuming partial $name block at its recorded commit: $artifact_commit"
+    fi
+  fi
+
+  (
+    cd "$execution_dir"
+    python -m pip install -e ".[gpu,analysis,test,postgres]"
+    txnagentbench plan --config "$config"
+    txnagentbench run --config "$config" --output "$output"
+    txnagentbench validate --output "$output"
+    bash scripts/finalize_artifact.sh "$output"
+  )
+
+  if [[ -n "$compatibility_worktree" ]]; then
+    # Restore the primary editable installation before removing the temporary
+    # checkout. The strict path check keeps cleanup scoped to this script's
+    # explicitly managed /content worktree.
+    python -m pip install -e ".[gpu,analysis,test,postgres]"
+    case "$compatibility_worktree" in
+      /content/txnagentbench-compat-*)
+        git worktree remove --force "$compatibility_worktree"
+        ;;
+      *)
+        echo "Refusing to remove unexpected path: $compatibility_worktree" >&2
+        exit 2
+        ;;
+    esac
+  fi
 }
 
 run_block "core" "configs/expanded_pilot_core_qwen25_7b.json"
