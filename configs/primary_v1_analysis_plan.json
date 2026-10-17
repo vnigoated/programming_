@@ -1,0 +1,79 @@
+{
+  "primary_design_id": "txnagentbench-primary-v1",
+  "alpha": 0.05,
+  "noninferiority_margin": 0.05,
+  "confirmatory": [
+    {
+      "name": "H1_concurrency_txnguard_vs_naive",
+      "block": "concurrency",
+      "outcome": "severe_violation",
+      "treatment": "txnguard",
+      "comparator": "naive"
+    }
+  ],
+  "secondary": [
+    {
+      "name": "dependency_txnguard_vs_naive",
+      "block": "dependency",
+      "outcome": "severe_violation",
+      "treatment": "txnguard",
+      "comparator": "naive"
+    },
+    {
+      "name": "recovery_txnguard_vs_recovery_only",
+      "block": "recovery",
+      "outcome": "severe_violation",
+      "treatment": "txnguard",
+      "comparator": "recovery_only"
+    },
+    {
+      "name": "recovery_txnguard_vs_no_recovery",
+      "block": "recovery",
+      "outcome": "severe_violation",
+      "treatment": "txnguard",
+      "comparator": "txnguard_no_recovery"
+    },
+    {
+      "name": "recovery_txnguard_vs_occ_recovery",
+      "block": "recovery",
+      "outcome": "severe_violation",
+      "treatment": "txnguard",
+      "comparator": "occ_recovery"
+    },
+    {
+      "name": "recovery_txnguard_vs_serial_recovery",
+      "block": "recovery",
+      "outcome": "severe_violation",
+      "treatment": "txnguard",
+      "comparator": "serial_recovery"
+    },
+    {
+      "name": "recovery_txnguard_vs_mtpo",
+      "block": "recovery",
+      "outcome": "severe_violation",
+      "treatment": "txnguard",
+      "comparator": "mtpo_reproduction"
+    }
+  ],
+  "noninferiority": [
+    {
+      "name": "concurrency_success_vs_serial",
+      "block": "concurrency",
+      "outcome": "task_success",
+      "treatment": "txnguard",
+      "comparator": "serial"
+    },
+    {
+      "name": "recovery_success_vs_serial_recovery",
+      "block": "recovery",
+      "outcome": "task_success",
+      "treatment": "txnguard",
+      "comparator": "serial_recovery"
+    }
+  ],
+  "mixed_effects": {
+    "outcome": "severe_violation",
+    "fixed_effects": ["policy", "domain", "model_name", "agent_count", "contention", "fault_mode"],
+    "random_intercept": ["primary_block", "domain", "model_name", "scenario_seed"]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "stage": "primary",
+  "primary_design_id": "txnagentbench-primary-v1",
+  "primary_block": "concurrency",
+  "domains": ["inventory", "calendar", "support", "cloud"],
+  "policies": ["serial", "naive", "occ", "postgres_serializable", "mtpo_reproduction", "txnguard"],
+  "agent_counts": [2, 4],
+  "contention_levels": [0, 50, 100],
+  "models": [
+    {
+      "name": "qwen2.5-7b-instruct",
+      "provider": "transformers",
+      "model_id": "Qwen/Qwen2.5-7B-Instruct",
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+      "quantization": "bf16",
+      "prompt_version": "allocation-v2"
+    },
+    {
+      "name": "mistral-7b-instruct-v0.3",
+      "provider": "transformers",
+      "model_id": "mistralai/Mistral-7B-Instruct-v0.3",
+      "revision": "c170c708c41dac9275d15a8fff4eca08d52bab71",
+      "quantization": "bf16",
+      "prompt_version": "allocation-v2"
+    }
+  ],
+  "scenario_seeds": [0, 1, 2, 3],
+  "schedule_seeds": [0, 1, 2, 3, 4, 5],
+  "fault_modes": ["none"]
+}

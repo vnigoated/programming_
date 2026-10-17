@@ -97,12 +97,25 @@ def analyze_study(input_dirs: list[Path], output_dir: Path) -> dict[str, Any]:
         if not manifest_path.exists():
             raise RuntimeError(f"Input artifact is not frozen: {input_dir}")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        frozen_config_path = input_dir / "frozen_config.json"
+        frozen_config = (
+            json.loads(frozen_config_path.read_text(encoding="utf-8"))
+            if frozen_config_path.exists()
+            else {}
+        )
         artifact = input_dir.name
         if artifact in artifact_commits:
             raise ValueError(f"Duplicate artifact name: {artifact}")
         artifact_commits[artifact] = manifest.get("code_commit")
         for row in load_summaries(input_dir):
-            rows.append({"artifact": artifact, **row})
+            rows.append(
+                {
+                    "artifact": artifact,
+                    "primary_design_id": frozen_config.get("primary_design_id"),
+                    "primary_block": frozen_config.get("primary_block"),
+                    **row,
+                }
+            )
     if not rows:
         raise RuntimeError("No completed summaries found in input artifacts.")
     identities = [(row["artifact"], row["run_id"]) for row in rows]

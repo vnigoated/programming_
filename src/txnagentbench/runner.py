@@ -13,7 +13,7 @@ from typing import Any, Iterable
 from .benchmark import RunSpec, run_benchmark
 from .benchmark import POLICY_UNSUPPORTED_FAULTS
 from .models import build_model
-from .faults import FAULT_MODES, PRIMARY_FAULT_MODES
+from .faults import FAULT_MODES, PRIMARY_BLOCK_FAULTS, PRIMARY_BLOCK_POLICIES
 
 
 IMMUTABLE_REVISION = re.compile(r"[0-9a-fA-F]{40}")
@@ -56,6 +56,30 @@ def validate_config(config: dict[str, Any]) -> None:
                 raise ValueError(
                     f"Model {model.get('name', '<unnamed>')} must freeze prompt_version allocation-v2."
                 )
+    if config["stage"] == "primary":
+        block = config.get("primary_block")
+        if block not in PRIMARY_BLOCK_FAULTS:
+            raise ValueError(
+                f"Primary config must set primary_block to one of {sorted(PRIMARY_BLOCK_FAULTS)}."
+            )
+        if not config.get("primary_design_id"):
+            raise ValueError("Primary config must set a non-empty primary_design_id.")
+        observed_faults = frozenset(config.get("fault_modes", ["none"]))
+        if observed_faults != PRIMARY_BLOCK_FAULTS[block]:
+            raise ValueError(
+                f"Primary block {block} must use exactly "
+                f"{sorted(PRIMARY_BLOCK_FAULTS[block])}; found {sorted(observed_faults)}."
+            )
+        observed_policies = frozenset(config["policies"])
+        if observed_policies != PRIMARY_BLOCK_POLICIES[block]:
+            raise ValueError(
+                f"Primary block {block} must use exactly "
+                f"{sorted(PRIMARY_BLOCK_POLICIES[block])}; found {sorted(observed_policies)}."
+            )
+        if block == "dependency" and set(config["domains"]) != {"cloud"}:
+            raise ValueError("The dependency primary block must contain only the cloud domain.")
+        if len({model["name"] for model in config["models"]}) < 2:
+            raise ValueError("Primary configs require at least two distinct model families.")
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -188,11 +212,6 @@ def run_matrix(
             )
         if "postgres_serializable" not in config["policies"]:
             raise RuntimeError("Primary config must include the real PostgreSQL serializable baseline.")
-        missing_faults = PRIMARY_FAULT_MODES - set(config.get("fault_modes", ["none"]))
-        if missing_faults:
-            raise RuntimeError(
-                f"Primary config is missing required fault modes: {sorted(missing_faults)}"
-            )
         for policy in config["policies"]:
             unsupported = set(config.get("fault_modes", ["none"])) & POLICY_UNSUPPORTED_FAULTS.get(
                 policy, set()
@@ -247,6 +266,9 @@ def run_matrix(
             try:
                 summary, trace = run_benchmark(spec, model_instance)
                 write_trace(run_dir / "trace.jsonl", trace)
+                error_path = run_dir / "error.json"
+                if error_path.exists():
+                    os.replace(error_path, run_dir / "prior_attempt_error.json")
                 atomic_json(summary_path, summary)
                 counts["completed"] += 1
             except Exception as exc:

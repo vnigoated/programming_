@@ -152,6 +152,27 @@ it until the 16-run cross-domain model smoke test validates without invalid mode
 
 ## Stage 6 Primary freeze
 
+Primary-v1 uses the three checked-in block configurations documented in
+`docs/PRIMARY_V1_PLAN.md`. Validate them together before launching any block:
+
+```bash
+txnagentbench validate-primary-suite \
+  --config configs/primary_v1_concurrency.json \
+  --config configs/primary_v1_dependency.json \
+  --config configs/primary_v1_recovery.json
+```
+
+Execute one restart-safe batch at a time with:
+
+```bash
+bash scripts/run_primary_v1_batch.sh concurrency \
+  /content/txnagentbench "$ARTIFACT_ROOT" 250
+```
+
+Use `dependency` or `recovery` as the first argument for the other blocks. A completed block is
+automatically validated, analyzed, frozen, and hash-verified. Rerunning a frozen block only verifies
+it. All batches for all blocks must use the exact tagged primary commit.
+
 Create an immutable primary configuration and record its SHA-256 hash. Tag the code commit. Archive package versions, model revisions, prompts, hardware information, and the analysis script before execution.
 
 Use the built-in preflight and artifact commands rather than notebook-specific hashing code:
@@ -189,6 +210,17 @@ Check for missing cells, repeated run IDs, environment changes, cap-triggered fa
 Generate run-level data first, then all tables and figures. Primary results should include paired risk differences, confidence intervals, speedup over serial execution, task-success noninferiority, side-effect violations, token overhead, and recovery rate.
 
 The included analyzer is an engineering check. The final statistical package must add McNemar tests, mixed-effects models, multiplicity handling for secondary comparisons, sensitivity analyses, and human-oracle agreement.
+
+For primary-v1, the frozen implementation is invoked only after all three blocks are complete:
+
+```bash
+txnagentbench analyze-primary \
+  --input "$ARTIFACT_ROOT/txnagentbench-primary-v1/concurrency" \
+  --input "$ARTIFACT_ROOT/txnagentbench-primary-v1/dependency" \
+  --input "$ARTIFACT_ROOT/txnagentbench-primary-v1/recovery" \
+  --plan configs/primary_v1_analysis_plan.json \
+  --output "$ARTIFACT_ROOT/txnagentbench-primary-v1-analysis"
+```
 
 ## Stage 10 Release
 

@@ -1,0 +1,18 @@
+{
+  "primary_design_id": "txnagentbench-primary-v1",
+  "sample_size": 240,
+  "sampling": "stratified by primary block, model, domain, policy family, and oracle outcome",
+  "blinding": ["policy", "automated_oracle_outcome"],
+  "independent_annotators": 2,
+  "adjudicate_disagreements": true,
+  "labels": [
+    "task_success",
+    "invariant_violation",
+    "side_effect_violation",
+    "lost_update",
+    "dependency_violation",
+    "recovery_violation"
+  ],
+  "agreement_metrics": ["raw_agreement", "cohen_kappa"],
+  "interpretation": "Report agreement and every adjudicated disagreement; do not tune oracles on primary outcomes."
+}

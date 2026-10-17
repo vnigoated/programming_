@@ -6,7 +6,8 @@ from pathlib import Path
 
 from .analysis import analyze
 from .artifacts import freeze_artifact, verify_manifest
-from .readiness import primary_readiness
+from .readiness import primary_readiness, validate_primary_suite
+from .primary_statistics import analyze_primary
 from .runner import expand_matrix, load_config, run_matrix
 from .study_analysis import analyze_study
 from .validation import validate_artifact
@@ -47,6 +48,18 @@ def main() -> None:
     readiness.add_argument("--config", type=Path, required=True)
     readiness.add_argument("--output", type=Path)
 
+    suite = commands.add_parser(
+        "validate-primary-suite", help="Validate the complete split primary design"
+    )
+    suite.add_argument("--config", type=Path, action="append", required=True)
+
+    primary_analysis = commands.add_parser(
+        "analyze-primary", help="Run the frozen confirmatory primary analysis"
+    )
+    primary_analysis.add_argument("--input", type=Path, action="append", required=True)
+    primary_analysis.add_argument("--output", type=Path, required=True)
+    primary_analysis.add_argument("--plan", type=Path, required=True)
+
     args = parser.parse_args()
     if args.command == "plan":
         config = load_config(args.config)
@@ -76,6 +89,14 @@ def main() -> None:
         print(json.dumps(result, indent=2))
         if not result["ready"]:
             raise SystemExit(1)
+    elif args.command == "validate-primary-suite":
+        result = validate_primary_suite(args.config)
+        print(json.dumps(result, indent=2))
+        if not result["ready"]:
+            raise SystemExit(1)
+    elif args.command == "analyze-primary":
+        result = analyze_primary(args.input, args.output, args.plan)
+        print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
