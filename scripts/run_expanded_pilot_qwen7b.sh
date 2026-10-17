@@ -48,17 +48,29 @@ run_block() {
 
   if [[ -f "$output/artifact_manifest.json" ]]; then
     txnagentbench verify-manifest --output "$output"
-    python - "$output/artifact_manifest.json" "$current_commit" <<'PY'
+    local artifact_commit
+    artifact_commit="$(python - "$output/artifact_manifest.json" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 manifest = json.loads(Path(sys.argv[1]).read_text())
-assert manifest["code_commit"] == sys.argv[2], (
-    "The existing pilot block was produced by a different code commit. "
-    "Finish all blocks from one revision or use a new pilot output root."
-)
+print(manifest["code_commit"])
 PY
+)"
+    if ! git cat-file -e "$artifact_commit^{commit}" 2>/dev/null; then
+      echo "Artifact commit is unavailable locally: $artifact_commit" >&2
+      exit 2
+    fi
+    if ! git diff --quiet "$artifact_commit" "$current_commit" -- \
+      pyproject.toml src/txnagentbench "$config"; then
+      echo "Existing block differs in benchmark code or its frozen configuration." >&2
+      echo "Use a new pilot output root instead of mixing implementations." >&2
+      exit 2
+    fi
+    if [[ "$artifact_commit" != "$current_commit" ]]; then
+      echo "PASS: benchmark-code compatibility verified: $artifact_commit -> $current_commit"
+    fi
     echo "PASS: existing block verified: $name"
     return
   fi
@@ -106,13 +118,12 @@ for name, expected_runs in expected.items():
         f"unsafe={sum(row['unsafe_proposals'] for row in summaries)}"
     )
 
-assert len(commits) == 1, f"Pilot blocks use different code commits: {sorted(commits)}"
 assert total_runs == 3264
-print("PASS: expanded pilot is complete and internally revision-consistent")
+print("PASS: expanded pilot is complete and benchmark-code compatible")
 print("Total runs:", total_runs)
 print("Invalid decisions retained:", total_invalid)
 print("Unsafe proposals retained:", total_unsafe)
-print("Code commit:", next(iter(commits)))
+print("Recorded block commits:", sorted(commits))
 PY
 
 echo "PASS: expanded pilot artifacts: $PILOT_ROOT"

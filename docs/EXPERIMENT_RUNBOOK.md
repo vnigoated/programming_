@@ -117,6 +117,11 @@ four-agent cells and PostgreSQL retries, budget approximately 60–90 minutes on
 is independently restartable and frozen. These pilot artifacts remain excluded from confirmatory
 estimates.
 
+A frozen pilot block may be resumed from a later commit only when the wrapper verifies with Git
+that the package source, `pyproject.toml`, and that block's frozen configuration are unchanged.
+Each block still records its exact commit. This compatibility exception is limited to pilot
+recovery from test/wrapper-only changes; every primary block must use one exact frozen commit.
+
 The locked single-model pilot configuration expands to 128 paired engineering runs. Do not execute
 it until the 16-run cross-domain model smoke test validates without invalid model actions.
 
