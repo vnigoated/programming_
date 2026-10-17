@@ -96,6 +96,27 @@ Run approximately 100 scenario-schedule cells across the candidate policies. Est
 
 Pilot data must be stored separately from the primary experiment and excluded from primary confirmatory estimates.
 
+The post-recovery expanded pilot is split into three prespecified blocks instead of applying every
+fault to every domain. This avoids paired no-op cells and reduces the design from 80,640 to 3,264
+runs:
+
+- Core: 1,536 runs over ordinary execution and ambiguous-effect replay.
+- Cloud dependency: 192 runs where dependency generation is semantically meaningful.
+- Recovery: 1,536 runs over the four workflow faults and two actionable scenario families.
+
+All blocks include the real PostgreSQL SSI policy. On Colab, the wrapper installs an ephemeral local
+PostgreSQL service, runs the marked integration tests, and records server metadata in every database
+summary:
+
+```bash
+bash scripts/run_expanded_pilot_qwen7b.sh /content/txnagentbench "$ARTIFACT_ROOT"
+```
+
+The earlier 160-run checkpoint used only two agents. After adjusting its measured rate for the
+four-agent cells and PostgreSQL retries, budget approximately 60–90 minutes on an A100. Each block
+is independently restartable and frozen. These pilot artifacts remain excluded from confirmatory
+estimates.
+
 The locked single-model pilot configuration expands to 128 paired engineering runs. Do not execute
 it until the 16-run cross-domain model smoke test validates without invalid model actions.
 

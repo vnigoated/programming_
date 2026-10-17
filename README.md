@@ -74,6 +74,17 @@ It executes 160 runs across all four domains, five non-database policies, zero a
 and the four workflow faults. It performs quality checks before freezing the artifact, so a failed
 gate remains inspectable and restartable.
 
+Once that checkpoint passes, the next prespecified pilot is:
+
+```bash
+bash scripts/run_expanded_pilot_qwen7b.sh \
+  /content/txnagentbench \
+  /content/drive/MyDrive/txnagentbench-artifacts
+```
+
+The wrapper starts a local PostgreSQL service and runs three independently frozen blocks totaling
+3,264 real-model runs. Pilot outputs are excluded from final confirmatory estimates.
+
 Re-running the same command skips completed run IDs. Delete a single run directory only when intentionally rerunning that exact cell.
 
 ## Colab setup
