@@ -65,6 +65,24 @@ def exact_mcnemar_pvalue(baseline_only_failure: int, txnguard_only_failure: int)
     return min(1.0, 2.0 * probability)
 
 
+def comparison_baselines(policies: set[str]) -> list[str]:
+    """Return every observed comparator in a stable, publication-friendly order."""
+    preferred = [
+        "naive",
+        "recovery_only",
+        "serial",
+        "serial_recovery",
+        "occ",
+        "occ_recovery",
+        "postgres_serializable",
+        "mtpo_reproduction",
+        "txnguard_no_recovery",
+    ]
+    ordered = [policy for policy in preferred if policy in policies]
+    ordered.extend(sorted(policies - set(ordered) - {"txnguard"}))
+    return ordered
+
+
 def analyze(output_dir: Path) -> dict[str, Any]:
     rows = load_summaries(output_dir)
     analysis_dir = output_dir / "analysis"
@@ -247,7 +265,8 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         json.dump(paired, handle, indent=2, sort_keys=True, allow_nan=False)
 
     paired_comparisons = []
-    for baseline in ["naive", "occ", "serial"]:
+    observed_policies = {row["policy"] for row in rows}
+    for baseline in comparison_baselines(observed_policies):
         differences = []
         baseline_only_failure = 0
         txnguard_only_failure = 0

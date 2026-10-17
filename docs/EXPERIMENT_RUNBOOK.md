@@ -122,6 +122,28 @@ that the package source, `pyproject.toml`, and that block's frozen configuration
 Each block still records its exact commit. This compatibility exception is limited to pilot
 recovery from test/wrapper-only changes; every primary block must use one exact frozen commit.
 
+After the expanded pilot, run the scripted recovery-ablation gate and then the independently pinned
+Mistral model checkpoint. The primary configuration must not be frozen until both pass:
+
+```bash
+txnagentbench run --config configs/recovery_ablation_smoke.json \
+  --output artifacts/recovery-ablation-smoke --allow-scripted
+
+bash scripts/run_mistral_model_smoke.sh \
+  /content/txnagentbench "$ARTIFACT_ROOT"
+```
+
+Combine frozen pilot blocks only into a separate, mutable analysis directory. Never write a new
+analysis file inside a frozen block:
+
+```bash
+txnagentbench analyze-study \
+  --input "$ARTIFACT_ROOT/expanded-pilot-qwen7b-v2/core" \
+  --input "$ARTIFACT_ROOT/expanded-pilot-qwen7b-v2/dependency" \
+  --input "$ARTIFACT_ROOT/expanded-pilot-qwen7b-v2/recovery" \
+  --output "$ARTIFACT_ROOT/expanded-pilot-qwen7b-v2-analysis"
+```
+
 The locked single-model pilot configuration expands to 128 paired engineering runs. Do not execute
 it until the 16-run cross-domain model smoke test validates without invalid model actions.
 

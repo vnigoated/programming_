@@ -108,6 +108,16 @@ treatment result.
 - `mtpo_reproduction`: independently implemented rank-ordered trajectory reconciliation with
   semantic repair, guarded replay, and registered inverse retry. It is not author-released CoAgent
   code and must not be described as such.
+- `serial_recovery`: serialized state access plus the same registered resume, idempotent-effect,
+  and compensation-retry capability used by the reference recovery layer. This controls for the
+  possibility that serialization plus durability is sufficient.
+- `occ_recovery`: OCC plus the same recovery capability. This is the strongest component-matched
+  in-memory control for determining whether TxnGuard adds value beyond composing OCC with durable
+  workflow handling.
+- `recovery_only`: snapshot-based naive concurrency plus recovery. This ablation isolates recovery
+  from concurrency validation and invariant enforcement.
+- `txnguard_no_recovery`: TxnGuard's version validation and invariant enforcement without workflow
+  recovery. Together with `recovery_only`, it tests whether both components are necessary.
 
 The in-memory OCC policy must never be described as PostgreSQL serializable isolation.
 
@@ -152,3 +162,11 @@ The deterministic scripted-agent matrices support oracle and recovery-infrastruc
 not paper claims. Before the primary study, add broader multi-resource scenarios, adversarial
 histories, human oracle agreement, real-model recovery smoke tests, and the final statistical
 analysis package.
+
+## Post-expanded-pilot amendment (2026-10-17)
+
+The 3,264-run expanded pilot produced perfect recovery separation between recovery-enabled and
+transaction-only policies. This was a valid engineering result but an insufficient primary design.
+The recovery-capable controls and component ablations above were therefore added before primary
+freeze. This amendment was made using pilot data only; those runs remain excluded from all primary
+confirmatory estimates. See `docs/EXPANDED_PILOT_REPORT.md`.

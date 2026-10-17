@@ -14,13 +14,33 @@ from .faults import FAULT_MODES, REPLAY_FAULTS
 
 IMPLEMENTED_POLICIES = {
     "serial",
+    "serial_recovery",
     "naive",
+    "recovery_only",
     "occ",
+    "occ_recovery",
     "postgres_serializable",
     "mtpo_reproduction",
     "txnguard",
+    "txnguard_no_recovery",
 }
 POLICY_UNSUPPORTED_FAULTS: dict[str, set[str]] = {}
+
+SERIAL_POLICIES = {"serial", "serial_recovery"}
+VERSION_VALIDATING_POLICIES = {
+    "occ",
+    "occ_recovery",
+    "txnguard",
+    "txnguard_no_recovery",
+}
+INVARIANT_GUARD_POLICIES = {"txnguard", "txnguard_no_recovery"}
+RECOVERY_POLICIES = {
+    "serial_recovery",
+    "occ_recovery",
+    "recovery_only",
+    "txnguard",
+}
+STALE_WRITE_POLICIES = {"naive", "recovery_only"}
 
 
 @dataclass(frozen=True)
@@ -90,7 +110,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
         trace.append({"event": "read", "agent": agent, "observation": dict(observation)})
         return observation
 
-    if spec.policy == "serial":
+    if spec.policy in SERIAL_POLICIES:
         execution = [(agent, None) for agent in order]
     else:
         for agent in order:
@@ -150,7 +170,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                 }
             )
 
-        if spec.policy in {"occ", "txnguard"} and environment.is_stale(observation):
+        if spec.policy in VERSION_VALIDATING_POLICIES and environment.is_stale(observation):
             conflicts += 1
             trace.append(
                 {"event": "conflict", "agent": agent, "resource_id": observation["resource_id"]}
@@ -160,7 +180,9 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                 rejected += 1
                 continue
 
-        if spec.policy == "txnguard" and not environment.can_apply(observation, decision.amount):
+        if spec.policy in INVARIANT_GUARD_POLICIES and not environment.can_apply(
+            observation, decision.amount
+        ):
             rejected += 1
             trace.append(
                 {
@@ -173,7 +195,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
 
         if spec.fault_mode == "crash_before_commit":
             recovery_attempts += 1
-            if spec.policy == "txnguard":
+            if spec.policy in RECOVERY_POLICIES:
                 trace.append(
                     {
                         "event": "recovery_record",
@@ -189,7 +211,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                     "resource_id": observation["resource_id"],
                 }
             )
-            if spec.policy != "txnguard":
+            if spec.policy not in RECOVERY_POLICIES:
                 rejected += 1
                 recovery_violations.append(f"unrecovered_precommit:{agent}")
                 continue
@@ -204,9 +226,9 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                 agent=agent,
                 observation=observation,
                 amount=decision.amount,
-                stale_write=spec.policy == "naive",
+                stale_write=spec.policy in STALE_WRITE_POLICIES,
                 idempotency_key=idempotency_key,
-                guarded=spec.policy == "txnguard",
+                guarded=spec.policy in INVARIANT_GUARD_POLICIES,
             )
         except ValueError as exc:
             rejected += 1
@@ -238,7 +260,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                 trace.append({"event": "ack_timeout", "agent": agent})
             delivered = environment.replay_effect(
                 idempotency_key=idempotency_key,
-                guarded=spec.policy == "txnguard",
+                guarded=spec.policy in RECOVERY_POLICIES,
             )
             trace.append(
                 {
@@ -263,7 +285,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                     "completed": compensated,
                 }
             )
-            if spec.policy == "txnguard":
+            if spec.policy in RECOVERY_POLICIES:
                 compensated = environment.compensate(idempotency_key, fail=False)
                 trace.append(
                     {

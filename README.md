@@ -36,6 +36,12 @@ pytest -q
 txnagentbench plan --config configs/smoke.json
 txnagentbench run --config configs/smoke.json --output artifacts/smoke --allow-scripted
 txnagentbench analyze --output artifacts/smoke
+
+# Combine immutable blocks without modifying them.
+txnagentbench analyze-study \
+  --input artifacts/pilot-core \
+  --input artifacts/pilot-recovery \
+  --output artifacts/pilot-study-analysis
 txnagentbench run --config configs/domain_smoke.json --output artifacts/domain-smoke --allow-scripted
 txnagentbench validate --output artifacts/domain-smoke
 txnagentbench run --config configs/recovery_smoke.json --output artifacts/recovery-smoke --allow-scripted

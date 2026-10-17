@@ -1,6 +1,11 @@
 import json
 
-from txnagentbench.analysis import exact_mcnemar_pvalue, finite_or_none, result_scope_note
+from txnagentbench.analysis import (
+    comparison_baselines,
+    exact_mcnemar_pvalue,
+    finite_or_none,
+    result_scope_note,
+)
 
 
 def write_config(tmp_path, stage, provider):
@@ -31,3 +36,21 @@ def test_nonfinite_results_are_strict_json_nulls():
     assert finite_or_none(float("nan")) is None
     assert finite_or_none(float("inf")) is None
     assert finite_or_none(-0.25) == -0.25
+
+
+def test_all_observed_policies_are_included_in_paired_comparisons():
+    policies = {
+        "txnguard",
+        "naive",
+        "occ",
+        "postgres_serializable",
+        "mtpo_reproduction",
+        "custom_baseline",
+    }
+    assert comparison_baselines(policies) == [
+        "naive",
+        "occ",
+        "postgres_serializable",
+        "mtpo_reproduction",
+        "custom_baseline",
+    ]

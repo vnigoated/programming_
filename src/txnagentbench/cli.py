@@ -8,6 +8,7 @@ from .analysis import analyze
 from .artifacts import freeze_artifact, verify_manifest
 from .readiness import primary_readiness
 from .runner import expand_matrix, load_config, run_matrix
+from .study_analysis import analyze_study
 from .validation import validate_artifact
 
 
@@ -26,6 +27,12 @@ def main() -> None:
 
     report = commands.add_parser("analyze", help="Aggregate completed run summaries")
     report.add_argument("--output", type=Path, required=True)
+
+    study = commands.add_parser(
+        "analyze-study", help="Combine frozen blocks outside their immutable directories"
+    )
+    study.add_argument("--input", type=Path, action="append", required=True)
+    study.add_argument("--output", type=Path, required=True)
 
     validate = commands.add_parser("validate", help="Validate a completed artifact against its frozen config")
     validate.add_argument("--output", type=Path, required=True)
@@ -50,6 +57,8 @@ def main() -> None:
         print(json.dumps(result, indent=2))
     elif args.command == "analyze":
         print(json.dumps(analyze(args.output), indent=2))
+    elif args.command == "analyze-study":
+        print(json.dumps(analyze_study(args.input, args.output), indent=2))
     elif args.command == "validate":
         result = validate_artifact(args.output)
         print(json.dumps(result, indent=2))

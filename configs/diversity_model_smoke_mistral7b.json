@@ -1,0 +1,20 @@
+{
+  "stage": "model-smoke",
+  "domains": ["inventory", "calendar", "support", "cloud"],
+  "policies": ["serial"],
+  "agent_counts": [2],
+  "contention_levels": [100],
+  "models": [
+    {
+      "name": "mistral-7b-instruct-v0.3",
+      "provider": "transformers",
+      "model_id": "mistralai/Mistral-7B-Instruct-v0.3",
+      "revision": "c170c708c41dac9275d15a8fff4eca08d52bab71",
+      "quantization": "bf16",
+      "prompt_version": "allocation-v2"
+    }
+  ],
+  "scenario_seeds": [0, 1, 2, 3],
+  "schedule_seeds": [0],
+  "fault_modes": ["none"]
+}
