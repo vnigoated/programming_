@@ -17,10 +17,11 @@ bash scripts/run_postgres_gate.sh
 The repository CI runs the same tests against a PostgreSQL service on every push. A green unit
 suite without the three PostgreSQL tests is insufficient; the integration job must execute them.
 
-The real database engine is connected to the benchmark matrix for `none` and `duplicate_effect`
-faults. The gate also runs a 64-cell scripted benchmark across all four domains and scenario
-families. `dependency_change` remains intentionally blocked until dependency rows participate in
-the same serializable transaction; therefore the primary matrix still cannot start.
+The real database engine is connected to the benchmark matrix for `none`, `duplicate_effect`, and
+`dependency_change` faults. The gate runs a 96-cell scripted benchmark across all four domains and
+scenario families. For the cloud dependency fault, a separate transaction commits a generation
+change after all agent transactions read; SSI must abort stale work with `40001`, and the retry must
+commit against the current generation.
 
 ## CoAgent / MTPO
 

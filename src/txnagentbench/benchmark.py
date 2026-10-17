@@ -12,7 +12,7 @@ from .models import DecisionModel
 
 
 IMPLEMENTED_POLICIES = {"serial", "naive", "occ", "postgres_serializable", "txnguard"}
-POLICY_UNSUPPORTED_FAULTS = {"postgres_serializable": {"dependency_change"}}
+POLICY_UNSUPPORTED_FAULTS: dict[str, set[str]] = {}
 
 
 @dataclass(frozen=True)

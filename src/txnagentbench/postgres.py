@@ -65,8 +65,15 @@ class PostgresSerializableStore:
                     capacity bigint NOT NULL CHECK (capacity >= 0),
                     allocated bigint NOT NULL CHECK (allocated >= 0 AND allocated <= capacity),
                     version bigint NOT NULL DEFAULT 0,
+                    dependency_generation bigint NOT NULL DEFAULT 0,
                     PRIMARY KEY (run_id, resource_id)
                 )
+                """
+            )
+            connection.execute(
+                """
+                ALTER TABLE txnagentbench_resources
+                ADD COLUMN IF NOT EXISTS dependency_generation bigint NOT NULL DEFAULT 0
                 """
             )
 
@@ -88,8 +95,8 @@ class PostgresSerializableStore:
                     connection.execute(
                         """
                         INSERT INTO txnagentbench_resources
-                            (run_id, resource_id, capacity, allocated, version)
-                        VALUES (%s, %s, %s, %s, %s)
+                            (run_id, resource_id, capacity, allocated, version, dependency_generation)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         """,
                         (
                             run_id,
@@ -97,6 +104,7 @@ class PostgresSerializableStore:
                             int(resource["capacity"]),
                             int(resource["allocated"]),
                             int(resource.get("version", 0)),
+                            int(resource.get("dependency_generation", 0)),
                         ),
                     )
 
@@ -118,6 +126,20 @@ class PostgresSerializableStore:
             }
             for row in rows
         ]
+
+    def bump_dependencies(self, run_id: str) -> None:
+        """Commit an external dependency change in its own serializable transaction."""
+        with self.connect() as connection:
+            with connection.transaction():
+                connection.execute(
+                    """
+                    UPDATE txnagentbench_resources
+                    SET dependency_generation = dependency_generation + 1,
+                        version = version + 1
+                    WHERE run_id = %s
+                    """,
+                    (run_id,),
+                )
 
     def allocate(
         self,
@@ -142,7 +164,7 @@ class PostgresSerializableStore:
                         )
                         row = connection.execute(
                             """
-                            SELECT capacity, allocated, version
+                            SELECT capacity, allocated, version, dependency_generation
                             FROM txnagentbench_resources
                             WHERE run_id = %s AND resource_id = %s
                             """,
@@ -155,6 +177,7 @@ class PostgresSerializableStore:
                             "capacity": int(row[0]),
                             "allocated": int(row[1]),
                             "version": int(row[2]),
+                            "dependency_generation": int(row[3]),
                         }
                         if attempt == 1 and after_first_read is not None:
                             after_first_read()
@@ -176,7 +199,7 @@ class PostgresSerializableStore:
                                 UPDATE txnagentbench_resources
                                 SET allocated = allocated + %s, version = version + 1
                                 WHERE run_id = %s AND resource_id = %s
-                                RETURNING capacity, allocated, version
+                                RETURNING capacity, allocated, version, dependency_generation
                                 """,
                                 (amount, run_id, resource_id),
                             ).fetchone()
@@ -185,6 +208,7 @@ class PostgresSerializableStore:
                                 "capacity": int(updated[0]),
                                 "allocated": int(updated[1]),
                                 "version": int(updated[2]),
+                                "dependency_generation": int(updated[3]),
                             }
                         else:
                             final_state = dict(observation)

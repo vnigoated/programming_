@@ -21,11 +21,6 @@ def run_postgres_benchmark(
         raise RuntimeError(
             "postgres_serializable requires TXNAGENTBENCH_POSTGRES_DSN and the postgres extra."
         )
-    if spec.fault_mode == "dependency_change":
-        raise NotImplementedError(
-            "PostgreSQL dependency-change transactions are not implemented; primary execution remains blocked."
-        )
-
     environment = build_environment(
         spec.domain, spec.agent_count, spec.contention, spec.scenario_seed
     )
@@ -37,7 +32,14 @@ def run_postgres_benchmark(
 
     trace: list[dict[str, Any]] = []
     model_lock = Lock()
-    barrier = Barrier(spec.agent_count)
+    fault_events: list[dict[str, Any]] = []
+
+    def inject_dependency_change() -> None:
+        if spec.fault_mode == "dependency_change" and spec.domain == "cloud":
+            fault_events.extend(environment.inject_fault(spec.fault_mode))
+            store.bump_dependencies(spec.run_id)
+
+    barrier = Barrier(spec.agent_count, action=inject_dependency_change)
     decision_records: dict[int, list[dict[str, Any]]] = {
         agent: [] for agent in range(spec.agent_count)
     }
@@ -85,6 +87,8 @@ def run_postgres_benchmark(
     with ThreadPoolExecutor(max_workers=spec.agent_count) as pool:
         futures = [pool.submit(worker, agent) for agent in range(spec.agent_count)]
         results = [future.result() for future in futures]
+
+    trace.extend(fault_events)
 
     accepted = 0
     rejected = 0

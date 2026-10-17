@@ -86,3 +86,22 @@ def test_postgres_policy_runs_through_benchmark(monkeypatch, store):
         event.get("event") == "database_transaction" and event.get("sqlstate") == "40001"
         for event in trace
     )
+
+
+def test_postgres_dependency_change_retries_to_current_generation(monkeypatch, store):
+    monkeypatch.setenv("TXNAGENTBENCH_POSTGRES_DSN", DSN)
+    spec = RunSpec(
+        "cloud",
+        "postgres_serializable",
+        2,
+        100,
+        "scripted-v1",
+        0,
+        scenario_seed=1,
+        fault_mode="dependency_change",
+    )
+    summary, trace = run_benchmark(spec, ScriptedDecisionModel())
+    assert summary["task_success"] is True
+    assert summary["dependency_violation"] is False
+    assert summary["serialization_retries"] >= 1
+    assert any(event.get("event") == "dependency_change" for event in trace)

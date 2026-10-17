@@ -12,5 +12,5 @@
   ],
   "scenario_seeds": [0, 1, 2, 3],
   "schedule_seeds": [0],
-  "fault_modes": ["none", "duplicate_effect"]
+  "fault_modes": ["none", "duplicate_effect", "dependency_change"]
 }
