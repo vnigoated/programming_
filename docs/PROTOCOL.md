@@ -32,8 +32,8 @@ before primary execution. Pilot runs are excluded from confirmatory estimates.
 ## Primary endpoint
 
 `severe_violation` is true when any domain oracle detects an invariant violation, an externally
-visible side-effect violation, a lost update, or a dependency-order violation. The primary effect
-is the paired risk difference:
+visible side-effect violation, a lost update, a dependency-order violation, or an unrecovered
+workflow fault. The primary effect is the paired risk difference:
 
 `P(severe | TxnGuard) - P(severe | naive)`.
 
@@ -79,19 +79,35 @@ and deployment against the wrong dependency generation.
   dependency generation advances and the resource version changes. Naive execution may deploy
   against the obsolete generation; version-validating policies must refresh or reject. Other
   domains treat this fault as a paired no-op control.
+- `crash_before_commit`: the worker stops after deciding but before a commit. The TxnGuard reference
+  policy resumes from its registered recovery record, and the MTPO reproduction resumes from its
+  registered trajectory. The PostgreSQL baseline performs its
+  SQL update and then raises inside the transaction, proving atomic rollback while also recording
+  that database atomicity alone does not recover the lost workflow job.
+- `crash_after_commit_before_ack`: the commit succeeds, the worker stops before acknowledging it,
+  and the operation is retried. Policies without an external idempotency ledger redeliver the
+  effect.
+- `delayed_ack`: the acknowledgement times out and the same operation is retried. This shares the
+  replay mechanism with the post-commit crash but records a distinct causal event.
+- `compensation_failure`: the first registered inverse operation fails. TxnGuard and the MTPO
+  reproduction retry the inverse; transaction-only policies leave the committed effect in place.
 
-Additional crash points must be added before the primary freeze. Fault injection is deterministic
-and paired across policies; it must never depend on an observed treatment result.
+Fault injection is deterministic and paired across policies; it must never depend on an observed
+treatment result.
 
 ## Policies
 
 - `serial`: each agent observes immediately before an atomic commit.
 - `naive`: agents decide from pre-execution snapshots and write without conflict validation.
 - `occ`: stale versions conflict; the system refreshes and rejects an infeasible action.
-- `txnguard`: version validation plus domain invariant checks and idempotent side-effect keys.
-- PostgreSQL serializable: publication baseline still to be implemented against a real database.
-- CoAgent: publication baseline still to be implemented faithfully or removed only through a
-  dated protocol amendment justified by reproducibility evidence.
+- `txnguard`: version validation, domain invariant checks, registered-resume semantics, idempotent
+  side-effect keys, and retryable compensation. The in-memory recovery record is a benchmark
+  abstraction, not evidence of process-level durability.
+- `postgres_serializable`: real PostgreSQL SSI transactions with SQLSTATE `40001` retries. It
+  guarantees database atomicity but intentionally has no workflow/effect recovery layer.
+- `mtpo_reproduction`: independently implemented rank-ordered trajectory reconciliation with
+  semantic repair, guarded replay, and registered inverse retry. It is not author-released CoAgent
+  code and must not be described as such.
 
 The in-memory OCC policy must never be described as PostgreSQL serializable isolation.
 
@@ -110,8 +126,9 @@ is recorded separately as an `unsafe_proposal`; it is not silently relabeled as 
 
 Primary metrics are severe-violation rate and task-success rate. Secondary metrics include lost
 updates, side-effect violations, dependency violations, conflict/retry counts, invalid actions,
-latency, token use, and recovery rate. Throughput measurements exclude model loading but include
-model inference and policy execution.
+recovery attempts, recovery successes, recovery-violation rate, latency, and token use. Recovery
+rate is the aggregate successful recoveries divided by recovery attempts. Throughput measurements
+exclude model loading but include model inference and policy execution.
 
 ## Statistical plan
 
@@ -131,7 +148,7 @@ result.
 
 ## Current engineering limitations
 
-The four in-memory simulators and deterministic scripted agent support oracle validation, not
-paper claims. Before the primary study, add broader scenario families, adversarial histories,
-human oracle agreement, real PostgreSQL serializable transactions, the selected multi-agent
-baseline, crash/retry injection, and final statistical analysis.
+The deterministic scripted-agent matrices support oracle and recovery-infrastructure validation,
+not paper claims. Before the primary study, add broader multi-resource scenarios, adversarial
+histories, human oracle agreement, real-model recovery smoke tests, and the final statistical
+analysis package.

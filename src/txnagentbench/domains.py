@@ -108,6 +108,11 @@ class DomainEnvironment(ABC):
         """Replay an at-least-once effect. Return true when another effect is delivered."""
         ...
 
+    @abstractmethod
+    def compensate(self, idempotency_key: str, fail: bool = False) -> bool:
+        """Undo one committed operation. Return true only when the inverse completes."""
+        ...
+
     def inject_fault(self, fault_mode: str) -> list[dict[str, Any]]:
         return []
 
@@ -225,6 +230,20 @@ class InventoryEnvironment(DomainEnvironment):
         if guarded and any(x["idempotency_key"] == idempotency_key for x in self.shipments):
             return False
         self.shipments.append(dict(effect))
+        return True
+
+    def compensate(self, idempotency_key: str, fail: bool = False) -> bool:
+        effect = next(
+            (x for x in self.shipments if x["idempotency_key"] == idempotency_key), None
+        )
+        if effect is None or effect.get("baseline") or fail:
+            return False
+        state = self.items[effect["sku"]]
+        state["reserved"] -= effect["amount"]
+        state["version"] += 1
+        self.shipments = [
+            x for x in self.shipments if x["idempotency_key"] != idempotency_key
+        ]
         return True
 
 
@@ -345,6 +364,20 @@ class CalendarEnvironment(DomainEnvironment):
         if guarded and any(x["idempotency_key"] == idempotency_key for x in self.invitations):
             return False
         self.invitations.append(dict(effect))
+        return True
+
+    def compensate(self, idempotency_key: str, fail: bool = False) -> bool:
+        effect = next(
+            (x for x in self.invitations if x["idempotency_key"] == idempotency_key), None
+        )
+        if effect is None or effect.get("baseline") or fail:
+            return False
+        state = self.slots[effect["slot_id"]]
+        state["booking_ids"].remove(effect["meeting_id"])
+        state["version"] += 1
+        self.invitations = [
+            x for x in self.invitations if x["idempotency_key"] != idempotency_key
+        ]
         return True
 
 
@@ -503,6 +536,21 @@ class SupportEnvironment(DomainEnvironment):
         self.notifications.append(dict(notice))
         return True
 
+    def compensate(self, idempotency_key: str, fail: bool = False) -> bool:
+        refund = next(
+            (x for x in self.refunds if x["idempotency_key"] == idempotency_key), None
+        )
+        if refund is None or refund.get("baseline") or fail:
+            return False
+        state = self.cases[refund["case_id"]]
+        state["refunded_cents"] -= refund["amount_cents"]
+        state["version"] += 1
+        self.refunds = [x for x in self.refunds if x["idempotency_key"] != idempotency_key]
+        self.notifications = [
+            x for x in self.notifications if x["idempotency_key"] != idempotency_key
+        ]
+        return True
+
 
 class CloudEnvironment(DomainEnvironment):
     name = "cloud"
@@ -647,6 +695,20 @@ class CloudEnvironment(DomainEnvironment):
         if guarded and any(x["idempotency_key"] == idempotency_key for x in self.deployments):
             return False
         self.deployments.append(dict(effect))
+        return True
+
+    def compensate(self, idempotency_key: str, fail: bool = False) -> bool:
+        effect = next(
+            (x for x in self.deployments if x["idempotency_key"] == idempotency_key), None
+        )
+        if effect is None or effect.get("baseline") or fail:
+            return False
+        state = self.pools[effect["pool_id"]]
+        state["used_units"] -= effect["amount_units"]
+        state["version"] += 1
+        self.deployments = [
+            x for x in self.deployments if x["idempotency_key"] != idempotency_key
+        ]
         return True
 
     def inject_fault(self, fault_mode: str) -> list[dict[str, Any]]:

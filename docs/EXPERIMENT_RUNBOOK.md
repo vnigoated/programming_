@@ -23,9 +23,10 @@ Pass criteria:
 
 ## Stage 2 Domain implementation
 
-Current status: the first in-memory implementations and oracle tests exist. They are suitable for
-scripted engineering validation. Broader scenario families, injected retries/crashes, adversarial
-histories, and human oracle agreement remain publication gates.
+Current status: the in-memory implementations, oracle tests, and deterministic recovery faults
+exist. They are suitable for scripted engineering validation. Broader multi-resource scenarios,
+adversarial histories, real-model recovery smoke tests, and human oracle agreement remain
+publication gates.
 
 Replace the shared-resource demonstration with four independent applications:
 
@@ -41,6 +42,11 @@ Each domain needs reset, observe, propose, commit, compensate, and score functio
 Implement every policy behind the same tool interface. The final study must include serial, naive parallel, PostgreSQL serializable isolation, an independently labelled MTPO reproduction, and TxnGuard. OCC remains a useful secondary baseline. Do not call the MTPO reproduction “CoAgent” or imply that it is author code unless an official immutable artifact becomes available.
 
 Do not rename the included OCC simulation as a PostgreSQL serializable result. The final database baseline must execute real PostgreSQL transactions and record isolation level, transaction retries, SQLSTATE values, and database version.
+
+Before any GPU run, execute `configs/recovery_smoke.json`. It covers pre-commit crashes,
+post-commit/pre-ack crashes, delayed acknowledgements, and failed compensation across every domain
+and non-database policy. The PostgreSQL CI matrix covers the same faults and must prove both the
+successful SQL rollback and the remaining workflow-recovery gap.
 
 ## Stage 4 Real model smoke test
 

@@ -9,6 +9,7 @@ from typing import Any
 
 from .benchmark import RunSpec
 from .domains import build_environment
+from .faults import REPLAY_FAULTS
 from .models import DecisionModel
 from .postgres import PostgresSerializableStore, TransactionResult
 
@@ -82,6 +83,7 @@ def run_postgres_benchmark(
             int(task["amount"]),
             after_first_read=barrier.wait,
             decide=decide,
+            crash_before_commit=spec.fault_mode == "crash_before_commit",
         )
 
     with ThreadPoolExecutor(max_workers=spec.agent_count) as pool:
@@ -98,6 +100,10 @@ def run_postgres_benchmark(
     input_tokens = 0
     output_tokens = 0
     model_latency = 0.0
+    recovery_attempts = 0
+    recovery_successes = 0
+    recovery_violations: list[str] = []
+    atomic_rollbacks = 0
 
     for result in sorted(results, key=lambda item: item.agent):
         records = decision_records[result.agent]
@@ -128,6 +134,18 @@ def run_postgres_benchmark(
                 }
             )
         conflicts += result.serialization_failures
+        if any(attempt.status == "worker_crash_rolled_back" for attempt in result.attempts):
+            recovery_attempts += 1
+            atomic_rollbacks += 1
+            recovery_violations.append(f"unrecovered_precommit:{result.agent}")
+            trace.append(
+                {
+                    "event": "worker_crash",
+                    "phase": "before_commit",
+                    "agent": result.agent,
+                    "database_rolled_back": True,
+                }
+            )
         if not result.accepted:
             rejected += 1
             continue
@@ -153,7 +171,18 @@ def run_postgres_benchmark(
                 "state": state,
             }
         )
-        if spec.fault_mode == "duplicate_effect":
+        if spec.fault_mode in REPLAY_FAULTS:
+            recovery_attempts += 1
+            if spec.fault_mode == "crash_after_commit_before_ack":
+                trace.append(
+                    {
+                        "event": "worker_crash",
+                        "phase": "after_commit_before_ack",
+                        "agent": result.agent,
+                    }
+                )
+            elif spec.fault_mode == "delayed_ack":
+                trace.append({"event": "ack_timeout", "agent": result.agent})
             delivered = environment.replay_effect(idempotency_key=idempotency_key, guarded=False)
             trace.append(
                 {
@@ -163,10 +192,31 @@ def run_postgres_benchmark(
                     "delivered": delivered,
                 }
             )
+            if delivered:
+                recovery_violations.append(f"duplicate_effect:{result.agent}")
+            else:
+                recovery_successes += 1
+        elif spec.fault_mode == "compensation_failure":
+            recovery_attempts += 1
+            compensated = environment.compensate(idempotency_key, fail=True)
+            trace.append(
+                {
+                    "event": "compensation",
+                    "agent": result.agent,
+                    "attempt": 1,
+                    "completed": compensated,
+                }
+            )
+            recovery_violations.append(f"compensation_failed:{result.agent}")
 
     oracle = environment.score()
     duration = time.perf_counter() - start
-    feasible = environment.successful_action_capacity()
+    feasible = (
+        0
+        if spec.fault_mode == "compensation_failure"
+        else environment.successful_action_capacity()
+    )
+    severe = oracle.severe or bool(recovery_violations)
     summary = {
         **spec.identity(),
         "run_id": spec.run_id,
@@ -177,13 +227,20 @@ def run_postgres_benchmark(
         "serialization_retries": conflicts,
         "invalid_actions": invalid_actions,
         "unsafe_proposals": unsafe_proposals,
-        "task_success": accepted >= feasible and not oracle.severe and invalid_actions == 0,
+        "recovery_attempts": recovery_attempts,
+        "recovery_successes": recovery_successes,
+        "recovery_rate": (
+            recovery_successes / recovery_attempts if recovery_attempts else None
+        ),
+        "recovery_violation": bool(recovery_violations),
+        "atomic_rollbacks": atomic_rollbacks,
+        "task_success": accepted >= feasible and not severe and invalid_actions == 0,
         "invariant_violation": bool(oracle.invariant_violations),
         "side_effect_violation": bool(oracle.side_effect_violations),
         "lost_update": bool(oracle.lost_updates),
         "dependency_violation": bool(oracle.dependency_violations),
-        "severe_violation": oracle.severe,
-        "serializable": not oracle.severe,
+        "severe_violation": severe,
+        "serializable": not severe,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "model_latency_seconds": model_latency,
@@ -197,6 +254,7 @@ def run_postgres_benchmark(
             "side_effect_violations": oracle.side_effect_violations,
             "lost_updates": oracle.lost_updates,
             "dependency_violations": oracle.dependency_violations,
+            "recovery_violations": recovery_violations,
         },
     }
     trace.append({"event": "oracle", "summary": summary})

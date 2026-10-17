@@ -71,6 +71,22 @@ def test_zero_contention_commits_without_retry(store):
     assert sum(result.serialization_failures for result in results) == 0
 
 
+def test_precommit_worker_crash_rolls_back_sql_update(store):
+    run_id = "integration-precommit-crash"
+    store.reset_run(
+        run_id,
+        [{"resource_id": "shared", "capacity": 1, "allocated": 0, "version": 0}],
+    )
+    result = store.allocate(
+        run_id, 0, "shared", 1, crash_before_commit=True
+    )
+    assert result.accepted is False
+    assert result.attempts[-1].status == "worker_crash_rolled_back"
+    assert store.read_all(run_id) == [
+        {"resource_id": "shared", "capacity": 1, "allocated": 0, "version": 0}
+    ]
+
+
 def test_postgres_policy_runs_through_benchmark(monkeypatch, store):
     monkeypatch.setenv("TXNAGENTBENCH_POSTGRES_DSN", DSN)
     spec = RunSpec(
@@ -105,3 +121,34 @@ def test_postgres_dependency_change_retries_to_current_generation(monkeypatch, s
     assert summary["dependency_violation"] is False
     assert summary["serialization_retries"] >= 1
     assert any(event.get("event") == "dependency_change" for event in trace)
+
+
+@pytest.mark.parametrize(
+    "fault_mode",
+    [
+        "crash_before_commit",
+        "crash_after_commit_before_ack",
+        "delayed_ack",
+        "compensation_failure",
+    ],
+)
+def test_postgres_reports_workflow_recovery_gap(monkeypatch, store, fault_mode):
+    monkeypatch.setenv("TXNAGENTBENCH_POSTGRES_DSN", DSN)
+    spec = RunSpec(
+        "inventory",
+        "postgres_serializable",
+        2,
+        0,
+        "scripted-v1",
+        0,
+        scenario_seed=0,
+        fault_mode=fault_mode,
+    )
+    summary, _ = run_benchmark(spec, ScriptedDecisionModel())
+    assert summary["recovery_attempts"] > 0
+    assert summary["recovery_rate"] == 0.0
+    assert summary["recovery_violation"] is True
+    assert summary["severe_violation"] is True
+    if fault_mode == "crash_before_commit":
+        assert summary["atomic_rollbacks"] == 2
+        assert all(row["allocated"] == 0 for row in summary["database_final_state"])

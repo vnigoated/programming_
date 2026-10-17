@@ -90,6 +90,10 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         "conflicts",
         "invalid_actions",
         "unsafe_proposals",
+        "recovery_attempts",
+        "recovery_successes",
+        "recovery_rate",
+        "recovery_violation",
         "task_success",
         "invariant_violation",
         "side_effect_violation",
@@ -113,6 +117,8 @@ def analyze(output_dir: Path) -> dict[str, Any]:
         grouped[row["policy"]].append(row)
     policy_rows = []
     for policy, items in sorted(grouped.items()):
+        recovery_attempts = sum(int(x.get("recovery_attempts", 0)) for x in items)
+        recovery_successes = sum(int(x.get("recovery_successes", 0)) for x in items)
         policy_rows.append(
             {
                 "policy": policy,
@@ -127,6 +133,14 @@ def analyze(output_dir: Path) -> dict[str, Any]:
                 "invalid_action_rate": mean([float(x["invalid_actions"] > 0) for x in items]),
                 "unsafe_proposal_rate": mean(
                     [float(x.get("unsafe_proposals", 0) > 0) for x in items]
+                ),
+                "recovery_attempts": recovery_attempts,
+                "recovery_successes": recovery_successes,
+                "recovery_rate": (
+                    recovery_successes / recovery_attempts if recovery_attempts else None
+                ),
+                "recovery_violation_rate": mean(
+                    [float(x.get("recovery_violation", False)) for x in items]
                 ),
                 "mean_conflicts": mean([float(x["conflicts"]) for x in items]),
                 "median_duration_seconds": statistics.median(x["duration_seconds"] for x in items),
@@ -169,6 +183,8 @@ def analyze(output_dir: Path) -> dict[str, Any]:
     for row in rows:
         by_fault_policy[(row.get("fault_mode", "none"), row["policy"])].append(row)
     for (fault_mode, policy), items in sorted(by_fault_policy.items()):
+        recovery_attempts = sum(int(x.get("recovery_attempts", 0)) for x in items)
+        recovery_successes = sum(int(x.get("recovery_successes", 0)) for x in items)
         fault_policy_rows.append(
             {
                 "fault_mode": fault_mode,
@@ -179,6 +195,14 @@ def analyze(output_dir: Path) -> dict[str, Any]:
                 "lost_update_rate": mean([float(x["lost_update"]) for x in items]),
                 "side_effect_violation_rate": mean(
                     [float(x["side_effect_violation"]) for x in items]
+                ),
+                "recovery_attempts": recovery_attempts,
+                "recovery_successes": recovery_successes,
+                "recovery_rate": (
+                    recovery_successes / recovery_attempts if recovery_attempts else None
+                ),
+                "recovery_violation_rate": mean(
+                    [float(x.get("recovery_violation", False)) for x in items]
                 ),
             }
         )

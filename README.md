@@ -7,7 +7,8 @@ This repository is a restart-safe engineering scaffold for the TxnAgentBench stu
 - Four independent in-memory domain simulators for inventory, calendar, support, and cloud
 - Domain-specific observations, actions, state transitions, side effects, and correctness oracles
 - Independent scenario and schedule seeds
-- Paired at-least-once external-effect replay with idempotency tracing
+- Seven paired fault modes covering concurrency, dependency changes, ambiguous acknowledgements,
+  worker crashes, replayed effects, and compensation failure
 - Serial, naive parallel, optimistic concurrency, and TxnGuard reference policies
 - Deterministic schedule seeds
 - Immutable per-run JSONL traces
@@ -16,9 +17,16 @@ This repository is a restart-safe engineering scaffold for the TxnAgentBench stu
 - Explicit primary-study readiness report that fails closed on missing baselines
 - Policy-level aggregation and paired bootstrap risk difference
 - Optional Hugging Face Transformers model adapter
-- A primary-study gate that rejects scripted models and stops at unimplemented publication baselines
+- Real PostgreSQL SSI and independently labelled MTPO reproduction baselines
+- A primary-study gate that rejects scripted models, mutable revisions, omitted baselines, and
+  omitted fault modes
 
-The domain simulators validate benchmark semantics, but they are not yet primary-study environments. Before the TMLR experiment, they need broader scenario families, retry/crash injection, adversarial histories, and human oracle validation. PostgreSQL serializable isolation and an independently labelled MTPO reproduction must also replace the engineering placeholders. No official CoAgent artifact was available in the bounded search, so the project does not claim its reproduction is the authors' implementation.
+The scripted matrices validate benchmark semantics and recovery infrastructure; they are not TMLR
+findings. Before the primary experiment, the study still needs broader multi-resource scenarios,
+adversarial histories, human oracle validation, real-model recovery smoke tests, and final
+statistical code. PostgreSQL serializable isolation and an independently labelled MTPO reproduction
+are implemented. No official CoAgent artifact was available in the bounded search, so the project
+does not claim its reproduction is the authors' implementation.
 
 ## Local verification
 
@@ -30,13 +38,16 @@ txnagentbench run --config configs/smoke.json --output artifacts/smoke --allow-s
 txnagentbench analyze --output artifacts/smoke
 txnagentbench run --config configs/domain_smoke.json --output artifacts/domain-smoke --allow-scripted
 txnagentbench validate --output artifacts/domain-smoke
+txnagentbench run --config configs/recovery_smoke.json --output artifacts/recovery-smoke --allow-scripted
+txnagentbench validate --output artifacts/recovery-smoke
+txnagentbench analyze --output artifacts/recovery-smoke
 txnagentbench freeze --output artifacts/domain-smoke
 txnagentbench verify-manifest --output artifacts/domain-smoke
 ```
 
 Run the full CPU-only diversity gate with `scripts/run_engineering_gates.sh` on Linux/Colab or
 `scripts/run_engineering_gates.ps1` on Windows. It covers four scenario families, two agent counts,
-three contention levels, two schedules, and normal plus duplicate-effect delivery.
+three contention levels, two schedules, and a separate 320-cell workflow-recovery matrix.
 
 After reconnecting a GPU Colab runtime, the next locked checkpoint is one command:
 

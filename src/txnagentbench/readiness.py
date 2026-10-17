@@ -5,6 +5,7 @@ import tempfile
 from typing import Any
 
 from .benchmark import IMPLEMENTED_POLICIES, POLICY_UNSUPPORTED_FAULTS
+from .faults import PRIMARY_FAULT_MODES
 from .runner import IMMUTABLE_REVISION, environment_manifest, load_config, validate_config
 
 
@@ -72,6 +73,16 @@ def primary_readiness(config_path: Path, output_dir: Path | None = None) -> dict
         not missing,
         "All primary policy names are present." if not missing else f"Missing: {missing}",
     )
+    missing_faults = sorted(
+        PRIMARY_FAULT_MODES - set(config.get("fault_modes", ["none"]))
+    )
+    add(
+        "required_fault_modes",
+        not missing_faults,
+        "All primary fault modes are present."
+        if not missing_faults
+        else f"Missing: {missing_faults}",
+    )
 
     unsupported_postgres_faults = sorted(
         set(config.get("fault_modes", ["none"]))
@@ -114,6 +125,6 @@ def primary_readiness(config_path: Path, output_dir: Path | None = None) -> dict
         "ready": not blockers,
         "checks": checks,
         "blockers": blockers,
-        "note": "A false readiness result is expected until publication baselines are implemented.",
+        "note": "Readiness is environmental and must be rerun against the final frozen config.",
     }
 

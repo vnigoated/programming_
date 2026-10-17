@@ -6,6 +6,7 @@ from typing import Any
 
 from .benchmark import RunSpec
 from .domains import build_environment
+from .faults import REPLAY_FAULTS
 from .models import Decision, DecisionModel
 
 
@@ -33,6 +34,8 @@ def run_mtpo_reproduction(
     input_tokens = output_tokens = 0
     model_latency = 0.0
     invalid_actions = unsafe_proposals = 0
+    recovery_attempts = recovery_successes = 0
+    recovery_violations: list[str] = []
 
     physical_order = list(range(spec.agent_count))
     random.Random(spec.schedule_seed).shuffle(physical_order)
@@ -93,6 +96,23 @@ def run_mtpo_reproduction(
         task = environment.task(agent)
         current = environment.observe(agent)
         decision = initial_decisions[agent]
+        if spec.fault_mode == "crash_before_commit":
+            recovery_attempts += 1
+            recovery_successes += 1
+            trace.extend(
+                [
+                    {
+                        "event": "worker_crash",
+                        "phase": "before_commit",
+                        "agent": agent,
+                    },
+                    {
+                        "event": "trajectory_recovery",
+                        "agent": agent,
+                        "rank": ranks[agent],
+                    },
+                ]
+            )
         changed = _premise(current) != _premise(observations[agent])
         if changed:
             notifications += 1
@@ -151,7 +171,18 @@ def run_mtpo_reproduction(
                 "state": state,
             }
         )
-        if spec.fault_mode == "duplicate_effect":
+        if spec.fault_mode in REPLAY_FAULTS:
+            recovery_attempts += 1
+            if spec.fault_mode == "crash_after_commit_before_ack":
+                trace.append(
+                    {
+                        "event": "worker_crash",
+                        "phase": "after_commit_before_ack",
+                        "agent": agent,
+                    }
+                )
+            elif spec.fault_mode == "delayed_ack":
+                trace.append({"event": "ack_timeout", "agent": agent})
             delivered = environment.replay_effect(idempotency_key, guarded=True)
             trace.append(
                 {
@@ -161,6 +192,37 @@ def run_mtpo_reproduction(
                     "delivered": delivered,
                 }
             )
+            if delivered:
+                recovery_violations.append(f"duplicate_effect:{agent}")
+            else:
+                recovery_successes += 1
+        elif spec.fault_mode == "compensation_failure":
+            recovery_attempts += 1
+            compensated = environment.compensate(idempotency_key, fail=True)
+            trace.append(
+                {
+                    "event": "compensation",
+                    "agent": agent,
+                    "attempt": 1,
+                    "completed": compensated,
+                }
+            )
+            compensated = environment.compensate(idempotency_key, fail=False)
+            trace.append(
+                {
+                    "event": "compensation",
+                    "agent": agent,
+                    "attempt": 2,
+                    "completed": compensated,
+                }
+            )
+            if compensated:
+                accepted -= 1
+                rejected += 1
+                inverse_operations += 1
+                recovery_successes += 1
+            else:
+                recovery_violations.append(f"compensation_failed:{agent}")
 
     trace.append(
         {
@@ -171,7 +233,12 @@ def run_mtpo_reproduction(
         }
     )
     oracle = environment.score()
-    feasible = environment.successful_action_capacity()
+    feasible = (
+        0
+        if spec.fault_mode == "compensation_failure"
+        else environment.successful_action_capacity()
+    )
+    severe = oracle.severe or bool(recovery_violations)
     summary = {
         **spec.identity(),
         "run_id": spec.run_id,
@@ -184,13 +251,19 @@ def run_mtpo_reproduction(
         "inverse_operations": inverse_operations,
         "invalid_actions": invalid_actions,
         "unsafe_proposals": unsafe_proposals,
-        "task_success": accepted >= feasible and not oracle.severe and invalid_actions == 0,
+        "recovery_attempts": recovery_attempts,
+        "recovery_successes": recovery_successes,
+        "recovery_rate": (
+            recovery_successes / recovery_attempts if recovery_attempts else None
+        ),
+        "recovery_violation": bool(recovery_violations),
+        "task_success": accepted >= feasible and not severe and invalid_actions == 0,
         "invariant_violation": bool(oracle.invariant_violations),
         "side_effect_violation": bool(oracle.side_effect_violations),
         "lost_update": bool(oracle.lost_updates),
         "dependency_violation": bool(oracle.dependency_violations),
-        "severe_violation": oracle.severe,
-        "serializable": not oracle.severe,
+        "severe_violation": severe,
+        "serializable": not severe,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "model_latency_seconds": model_latency,
@@ -202,6 +275,7 @@ def run_mtpo_reproduction(
             "side_effect_violations": oracle.side_effect_violations,
             "lost_updates": oracle.lost_updates,
             "dependency_violations": oracle.dependency_violations,
+            "recovery_violations": recovery_violations,
         },
         "baseline_provenance": {
             "name": "mtpo_reproduction",

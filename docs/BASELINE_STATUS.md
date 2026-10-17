@@ -15,13 +15,17 @@ bash scripts/run_postgres_gate.sh
 ```
 
 The repository CI runs the same tests against a PostgreSQL service on every push. A green unit
-suite without the three PostgreSQL tests is insufficient; the integration job must execute them.
+suite with the PostgreSQL-marked tests skipped is insufficient; the integration job must execute
+them.
 
-The real database engine is connected to the benchmark matrix for `none`, `duplicate_effect`, and
-`dependency_change` faults. The gate runs a 96-cell scripted benchmark across all four domains and
-scenario families. For the cloud dependency fault, a separate transaction commits a generation
-change after all agent transactions read; SSI must abort stale work with `40001`, and the retry must
-commit against the current generation.
+The real database engine is connected to all seven frozen fault modes. The gate runs a 224-cell
+scripted benchmark across all four domains and scenario families. For the cloud dependency fault,
+a separate transaction commits a generation change after all agent transactions read; SSI must
+abort stale work with `40001`, and the retry must commit against the current generation. For a
+pre-commit worker crash, the adapter raises after the SQL update but inside the transaction and
+verifies rollback. Post-commit acknowledgement loss, delayed acknowledgements, and failed
+compensation deliberately expose the absence of an external workflow recovery layer; this
+separates database isolation claims from exactly-once effect claims.
 
 ## CoAgent / MTPO
 
@@ -32,9 +36,9 @@ called the official or faithful CoAgent implementation.
 
 The implemented comparison is named `mtpo_reproduction`. It fixes rank at launch, records physical
 trajectory order, notifies agents whose premises changed, invokes the same model for semantic
-repair, reconciles operations in rank order, records inverse/reorder counts, and suppresses replayed
-effects using registered idempotency keys. Every summary records that it is not official author
-code.
+repair, reconciles operations in rank order, records inverse/reorder counts, suppresses replayed
+effects using registered idempotency keys, resumes pre-commit trajectory work, and retries a failed
+registered inverse. Every summary records that it is not official author code.
 
 Important deviation: the synthetic environments are resettable, so quiescent reconciliation
 replays registered operations in rank order rather than performing arbitrary live-system saga

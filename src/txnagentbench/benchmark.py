@@ -9,6 +9,7 @@ from typing import Any
 
 from .domains import build_environment
 from .models import DecisionModel
+from .faults import FAULT_MODES, REPLAY_FAULTS
 
 
 IMPLEMENTED_POLICIES = {
@@ -60,7 +61,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
         )
     if spec.policy not in IMPLEMENTED_POLICIES:
         raise ValueError(f"Unknown policy: {spec.policy}")
-    if spec.fault_mode not in {"none", "duplicate_effect", "dependency_change"}:
+    if spec.fault_mode not in FAULT_MODES:
         raise ValueError(f"Unknown fault mode: {spec.fault_mode}")
 
     environment = build_environment(
@@ -78,6 +79,9 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
     input_tokens = 0
     output_tokens = 0
     model_latency = 0.0
+    recovery_attempts = 0
+    recovery_successes = 0
+    recovery_violations: list[str] = []
     start = time.perf_counter()
     snapshots: dict[int, dict[str, Any]] = {}
 
@@ -167,6 +171,31 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
             )
             continue
 
+        if spec.fault_mode == "crash_before_commit":
+            recovery_attempts += 1
+            if spec.policy == "txnguard":
+                trace.append(
+                    {
+                        "event": "recovery_record",
+                        "agent": agent,
+                        "resource_id": observation["resource_id"],
+                    }
+                )
+            trace.append(
+                {
+                    "event": "worker_crash",
+                    "phase": "before_commit",
+                    "agent": agent,
+                    "resource_id": observation["resource_id"],
+                }
+            )
+            if spec.policy != "txnguard":
+                rejected += 1
+                recovery_violations.append(f"unrecovered_precommit:{agent}")
+                continue
+            recovery_successes += 1
+            trace.append({"event": "recovery_resume", "agent": agent})
+
         idempotency_key = (
             f"{spec.run_id}:{agent}:{task['action']}:{observation['resource_id']}"
         )
@@ -199,7 +228,14 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                 "state": state,
             }
         )
-        if spec.fault_mode == "duplicate_effect":
+        if spec.fault_mode in REPLAY_FAULTS:
+            recovery_attempts += 1
+            if spec.fault_mode == "crash_after_commit_before_ack":
+                trace.append(
+                    {"event": "worker_crash", "phase": "after_commit_before_ack", "agent": agent}
+                )
+            elif spec.fault_mode == "delayed_ack":
+                trace.append({"event": "ack_timeout", "agent": agent})
             delivered = environment.replay_effect(
                 idempotency_key=idempotency_key,
                 guarded=spec.policy == "txnguard",
@@ -212,11 +248,47 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
                     "delivered": delivered,
                 }
             )
+            if delivered:
+                recovery_violations.append(f"duplicate_effect:{agent}")
+            else:
+                recovery_successes += 1
+        elif spec.fault_mode == "compensation_failure":
+            recovery_attempts += 1
+            compensated = environment.compensate(idempotency_key, fail=True)
+            trace.append(
+                {
+                    "event": "compensation",
+                    "agent": agent,
+                    "attempt": 1,
+                    "completed": compensated,
+                }
+            )
+            if spec.policy == "txnguard":
+                compensated = environment.compensate(idempotency_key, fail=False)
+                trace.append(
+                    {
+                        "event": "compensation",
+                        "agent": agent,
+                        "attempt": 2,
+                        "completed": compensated,
+                    }
+                )
+            if compensated:
+                accepted -= 1
+                rejected += 1
+                recovery_successes += 1
+            else:
+                recovery_violations.append(f"compensation_failed:{agent}")
 
     oracle = environment.score()
     duration = time.perf_counter() - start
-    feasible = environment.successful_action_capacity()
-    task_success = accepted >= feasible and not oracle.severe and invalid_actions == 0
+    feasible = (
+        0
+        if spec.fault_mode == "compensation_failure"
+        else environment.successful_action_capacity()
+    )
+    severe = oracle.severe or bool(recovery_violations)
+    task_success = accepted >= feasible and not severe and invalid_actions == 0
     summary = {
         **spec.identity(),
         "run_id": spec.run_id,
@@ -226,13 +298,19 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
         "conflicts": conflicts,
         "invalid_actions": invalid_actions,
         "unsafe_proposals": unsafe_proposals,
+        "recovery_attempts": recovery_attempts,
+        "recovery_successes": recovery_successes,
+        "recovery_rate": (
+            recovery_successes / recovery_attempts if recovery_attempts else None
+        ),
+        "recovery_violation": bool(recovery_violations),
         "task_success": task_success,
         "invariant_violation": bool(oracle.invariant_violations),
         "side_effect_violation": bool(oracle.side_effect_violations),
         "lost_update": bool(oracle.lost_updates),
         "dependency_violation": bool(oracle.dependency_violations),
-        "severe_violation": oracle.severe,
-        "serializable": not oracle.severe,
+        "severe_violation": severe,
+        "serializable": not severe,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "model_latency_seconds": model_latency,
@@ -244,6 +322,7 @@ def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], 
             "side_effect_violations": oracle.side_effect_violations,
             "lost_updates": oracle.lost_updates,
             "dependency_violations": oracle.dependency_violations,
+            "recovery_violations": recovery_violations,
         },
     }
     trace.append({"event": "oracle", "summary": summary})

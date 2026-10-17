@@ -8,6 +8,10 @@ from typing import Any, Callable, Iterable
 SERIALIZATION_FAILURE = "40001"
 
 
+class SimulatedWorkerCrash(RuntimeError):
+    """Benchmark-only failure raised inside a transaction before commit."""
+
+
 def _psycopg():
     try:
         import psycopg
@@ -149,6 +153,7 @@ class PostgresSerializableStore:
         amount: int,
         after_first_read: Callable[[], None] | None = None,
         decide: Callable[[dict[str, int | str]], str] | None = None,
+        crash_before_commit: bool = False,
     ) -> TransactionResult:
         psycopg = _psycopg()
         history: list[TransactionAttempt] = []
@@ -210,6 +215,10 @@ class PostgresSerializableStore:
                                 "version": int(updated[2]),
                                 "dependency_generation": int(updated[3]),
                             }
+                            if crash_before_commit:
+                                raise SimulatedWorkerCrash(
+                                    "worker crashed after SQL update and before transaction commit"
+                                )
                         else:
                             final_state = dict(observation)
                 history.append(
@@ -219,6 +228,26 @@ class PostgresSerializableStore:
                 )
                 return TransactionResult(
                     agent, resource_id, accepted, observation, final_state, tuple(history)
+                )
+            except SimulatedWorkerCrash:
+                history.append(
+                    TransactionAttempt(
+                        attempt,
+                        "worker_crash_rolled_back",
+                        None,
+                        isolation,
+                        time.perf_counter() - started,
+                    )
+                )
+                if observation is None:
+                    raise AssertionError("pre-commit crash occurred before the database read")
+                return TransactionResult(
+                    agent,
+                    resource_id,
+                    False,
+                    observation,
+                    dict(observation),
+                    tuple(history),
                 )
             except psycopg.Error as exc:
                 sqlstate = getattr(exc, "sqlstate", None)

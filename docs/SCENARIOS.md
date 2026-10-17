@@ -31,8 +31,14 @@ four agents.
 - `duplicate_effect`: replay the same external idempotency key after commit.
 - `dependency_change`: advance cloud dependency generation after parallel reads and before commits;
   it is a paired no-op control in other domains.
+- `crash_before_commit`: stop a worker before commit and test durable workflow resumption separately
+  from database rollback.
+- `crash_after_commit_before_ack`: commit, lose the acknowledgement, and replay the operation.
+- `delayed_ack`: time out the acknowledgement and replay the operation.
+- `compensation_failure`: fail the first inverse operation and test whether the policy retries it.
 
 ## Remaining scenario work
 
-Before primary freeze, add multi-resource write-skew cases, crash-before/after-commit recovery,
-delayed acknowledgements, compensation failure, and human-reviewed natural-language task variants.
+Before primary freeze, add multi-resource write-skew cases and human-reviewed natural-language
+task variants. The four workflow-recovery faults are implemented and covered by the scripted
+recovery gate.

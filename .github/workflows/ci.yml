@@ -49,3 +49,9 @@ jobs:
           --output artifacts/mtpo-smoke-ci
           --allow-scripted
       - run: txnagentbench validate --output artifacts/mtpo-smoke-ci
+      - run: >-
+          txnagentbench run
+          --config configs/recovery_smoke.json
+          --output artifacts/recovery-smoke-ci
+          --allow-scripted
+      - run: txnagentbench validate --output artifacts/recovery-smoke-ci

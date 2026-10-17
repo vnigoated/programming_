@@ -7,5 +7,13 @@
   "models": [{"name": "scripted-v1", "provider": "scripted"}],
   "scenario_seeds": [0, 1, 2, 3],
   "schedule_seeds": [0, 1],
-  "fault_modes": ["none", "duplicate_effect", "dependency_change"]
+  "fault_modes": [
+    "none",
+    "duplicate_effect",
+    "dependency_change",
+    "crash_before_commit",
+    "crash_after_commit_before_ack",
+    "delayed_ack",
+    "compensation_failure"
+  ]
 }

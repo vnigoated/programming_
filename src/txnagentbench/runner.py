@@ -13,6 +13,7 @@ from typing import Any, Iterable
 from .benchmark import RunSpec, run_benchmark
 from .benchmark import POLICY_UNSUPPORTED_FAULTS
 from .models import build_model
+from .faults import FAULT_MODES, PRIMARY_FAULT_MODES
 
 
 IMMUTABLE_REVISION = re.compile(r"[0-9a-fA-F]{40}")
@@ -38,8 +39,7 @@ def validate_config(config: dict[str, Any]) -> None:
     if any(int(value) < 1 for value in config["agent_counts"]):
         raise ValueError("Agent counts must be positive.")
     unknown_faults = sorted(
-        set(config.get("fault_modes", ["none"]))
-        - {"none", "duplicate_effect", "dependency_change"}
+        set(config.get("fault_modes", ["none"])) - FAULT_MODES
     )
     if unknown_faults:
         raise ValueError(f"Unknown fault modes: {', '.join(unknown_faults)}")
@@ -188,6 +188,11 @@ def run_matrix(
             )
         if "postgres_serializable" not in config["policies"]:
             raise RuntimeError("Primary config must include the real PostgreSQL serializable baseline.")
+        missing_faults = PRIMARY_FAULT_MODES - set(config.get("fault_modes", ["none"]))
+        if missing_faults:
+            raise RuntimeError(
+                f"Primary config is missing required fault modes: {sorted(missing_faults)}"
+            )
         for policy in config["policies"]:
             unsupported = set(config.get("fault_modes", ["none"])) & POLICY_UNSUPPORTED_FAULTS.get(
                 policy, set()

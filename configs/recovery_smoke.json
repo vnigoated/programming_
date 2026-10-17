@@ -1,0 +1,21 @@
+{
+  "stage": "recovery-smoke",
+  "domains": ["inventory", "calendar", "support", "cloud"],
+  "policies": ["serial", "naive", "occ", "mtpo_reproduction", "txnguard"],
+  "agent_counts": [2],
+  "contention_levels": [0, 100],
+  "models": [
+    {
+      "name": "scripted-v1",
+      "provider": "scripted"
+    }
+  ],
+  "scenario_seeds": [0, 1],
+  "schedule_seeds": [0],
+  "fault_modes": [
+    "crash_before_commit",
+    "crash_after_commit_before_ack",
+    "delayed_ack",
+    "compensation_failure"
+  ]
+}

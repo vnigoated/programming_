@@ -1,6 +1,7 @@
 import json
 
 from txnagentbench.readiness import primary_readiness
+from txnagentbench.faults import PRIMARY_FAULT_MODES
 
 
 def test_primary_readiness_recognizes_implemented_publication_adapters(tmp_path):
@@ -22,7 +23,7 @@ def test_primary_readiness_recognizes_implemented_publication_adapters(tmp_path)
         ],
         "scenario_seeds": [0],
         "schedule_seeds": [0],
-        "fault_modes": ["none"],
+        "fault_modes": sorted(PRIMARY_FAULT_MODES),
     }
     config_path = tmp_path / "primary.json"
     config_path.write_text(json.dumps(config), encoding="utf-8")
@@ -31,3 +32,4 @@ def test_primary_readiness_recognizes_implemented_publication_adapters(tmp_path)
     assert checks["persistent_output"]["passed"] is True
     assert checks["postgres_serializable_adapter"]["passed"] is True
     assert checks["mtpo_reproduction_adapter"]["passed"] is True
+    assert checks["required_fault_modes"]["passed"] is True
