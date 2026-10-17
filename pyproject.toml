@@ -19,6 +19,7 @@ gpu = [
   "transformers>=4.46",
 ]
 analysis = ["pandas>=2.2", "pyarrow>=17", "scipy>=1.13", "statsmodels>=0.14"]
+postgres = ["psycopg[binary]>=3.2,<4"]
 test = ["pytest>=8", "hypothesis>=6"]
 
 [project.scripts]
@@ -29,4 +30,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["postgres: requires the real PostgreSQL integration service"]
 

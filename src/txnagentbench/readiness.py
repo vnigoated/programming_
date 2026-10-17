@@ -11,7 +11,7 @@ from .runner import IMMUTABLE_REVISION, environment_manifest, load_config, valid
 REQUIRED_PRIMARY_POLICIES = {
     "naive",
     "postgres_serializable",
-    "coagent",
+    "mtpo_reproduction",
     "txnguard",
 }
 
@@ -74,16 +74,18 @@ def primary_readiness(config_path: Path, output_dir: Path | None = None) -> dict
     )
 
     postgres_ready = "postgres_serializable" in IMPLEMENTED_POLICIES
-    coagent_ready = "coagent" in IMPLEMENTED_POLICIES
+    mtpo_ready = "mtpo_reproduction" in IMPLEMENTED_POLICIES
     add(
         "postgres_serializable_adapter",
         postgres_ready,
         "Implemented." if postgres_ready else "Not implemented: real PostgreSQL transactions are required.",
     )
     add(
-        "coagent_adapter",
-        coagent_ready,
-        "Implemented." if coagent_ready else "Not implemented: faithful reproducible CoAgent adapter is required.",
+        "mtpo_reproduction_adapter",
+        mtpo_ready,
+        "Implemented."
+        if mtpo_ready
+        else "Not implemented: independent paper-specified MTPO reproduction is required.",
     )
 
     environment = environment_manifest()

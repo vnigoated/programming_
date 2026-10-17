@@ -38,7 +38,7 @@ Each domain needs reset, observe, propose, commit, compensate, and score functio
 
 ## Stage 3 Policy implementation
 
-Implement every policy behind the same tool interface. The final study must include serial, naive parallel, PostgreSQL serializable isolation, a faithful CoAgent adapter when reproducible, and TxnGuard. OCC remains a useful secondary baseline.
+Implement every policy behind the same tool interface. The final study must include serial, naive parallel, PostgreSQL serializable isolation, an independently labelled MTPO reproduction, and TxnGuard. OCC remains a useful secondary baseline. Do not call the MTPO reproduction “CoAgent” or imply that it is author code unless an official immutable artifact becomes available.
 
 Do not rename the included OCC simulation as a PostgreSQL serializable result. The final database baseline must execute real PostgreSQL transactions and record isolation level, transaction retries, SQLSTATE values, and database version.
 
@@ -101,7 +101,7 @@ artifact is complete and prevents accidental replacement of an existing manifest
 The primary command must refuse to run when:
 
 - A scripted model is configured.
-- CoAgent is absent without an approved protocol amendment.
+- The documented MTPO reproduction is absent without an approved protocol amendment.
 - A model revision is mutable or missing.
 - Required oracle tests fail.
 - Output storage is not persistent and writable.

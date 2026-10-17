@@ -7,7 +7,7 @@ def test_primary_readiness_fails_closed_on_unimplemented_adapters(tmp_path):
     config = {
         "stage": "primary",
         "domains": ["inventory"],
-        "policies": ["naive", "postgres_serializable", "coagent", "txnguard"],
+        "policies": ["naive", "postgres_serializable", "mtpo_reproduction", "txnguard"],
         "agent_counts": [2],
         "contention_levels": [100],
         "models": [
@@ -31,4 +31,4 @@ def test_primary_readiness_fails_closed_on_unimplemented_adapters(tmp_path):
     assert result["ready"] is False
     assert checks["persistent_output"]["passed"] is True
     assert checks["postgres_serializable_adapter"]["passed"] is False
-    assert checks["coagent_adapter"]["passed"] is False
+    assert checks["mtpo_reproduction_adapter"]["passed"] is False

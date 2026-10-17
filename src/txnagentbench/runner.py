@@ -181,8 +181,10 @@ def run_matrix(
     if config.get("stage") == "primary":
         if any(model.get("provider") == "scripted" for model in config["models"]):
             raise RuntimeError("Primary experiments cannot use scripted agents.")
-        if "coagent" not in config["policies"]:
-            raise RuntimeError("Primary config must include CoAgent or document an approved protocol change.")
+        if "mtpo_reproduction" not in config["policies"]:
+            raise RuntimeError(
+                "Primary config must include the documented MTPO reproduction or an approved protocol change."
+            )
         if "postgres_serializable" not in config["policies"]:
             raise RuntimeError("Primary config must include the real PostgreSQL serializable baseline.")
     elif not allow_scripted and any(model.get("provider") == "scripted" for model in config["models"]):

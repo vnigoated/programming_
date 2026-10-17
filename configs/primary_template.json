@@ -1,7 +1,7 @@
 {
   "stage": "primary",
   "domains": ["inventory", "calendar", "support", "cloud"],
-  "policies": ["serial", "naive", "occ", "postgres_serializable", "coagent", "txnguard"],
+  "policies": ["serial", "naive", "occ", "postgres_serializable", "mtpo_reproduction", "txnguard"],
   "agent_counts": [2, 4],
   "contention_levels": [0, 50, 75],
   "models": [

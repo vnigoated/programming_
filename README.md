@@ -16,9 +16,9 @@ This repository is a restart-safe engineering scaffold for the TxnAgentBench stu
 - Explicit primary-study readiness report that fails closed on missing baselines
 - Policy-level aggregation and paired bootstrap risk difference
 - Optional Hugging Face Transformers model adapter
-- A primary-study gate that rejects scripted models and stops at the unimplemented CoAgent adapter
+- A primary-study gate that rejects scripted models and stops at unimplemented publication baselines
 
-The domain simulators validate benchmark semantics, but they are not yet primary-study environments. Before the TMLR experiment, they need broader scenario families, retry/crash injection, adversarial histories, and human oracle validation. PostgreSQL serializable isolation and a faithful CoAgent adapter must also replace the engineering placeholders.
+The domain simulators validate benchmark semantics, but they are not yet primary-study environments. Before the TMLR experiment, they need broader scenario families, retry/crash injection, adversarial histories, and human oracle validation. PostgreSQL serializable isolation and an independently labelled MTPO reproduction must also replace the engineering placeholders. No official CoAgent artifact was available in the bounded search, so the project does not claim its reproduction is the authors' implementation.
 
 ## Local verification
 
@@ -68,7 +68,7 @@ results validate the oracles only and must not be reported as empirical findings
 
 Do not launch the primary matrix until all publication gates in `docs/EXPERIMENT_RUNBOOK.md` pass.
 Run `txnagentbench readiness --config configs/primary_template.json --output /mounted/artifacts` to see the unresolved gates;
-its nonzero exit status is intentional until the real PostgreSQL and CoAgent adapters exist.
+its nonzero exit status is intentional until the real PostgreSQL and MTPO reproduction adapters exist.
 
 ## Artifact layout
 

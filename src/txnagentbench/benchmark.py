@@ -38,7 +38,7 @@ class RunSpec:
 
 
 def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    if spec.policy in {"coagent", "postgres_serializable"}:
+    if spec.policy in {"coagent", "mtpo_reproduction", "postgres_serializable"}:
         raise NotImplementedError(
             f"{spec.policy} is an explicit publication gate. Implement its real adapter before final runs."
         )
