@@ -32,6 +32,7 @@ printf 'persistent-write-ok\n' > "$PROBE"
 test "$(cat "$PROBE")" = "persistent-write-ok"
 rm "$PROBE"
 
+python -m pip install -e ".[gpu,analysis,test,postgres]"
 bash scripts/setup_colab_postgres.sh
 export TXNAGENTBENCH_POSTGRES_DSN="postgresql://txnagentbench:txnagentbench-colab-local@127.0.0.1:5432/txnagentbench"
 export TXNAGENTBENCH_TEST_POSTGRES_DSN="$TXNAGENTBENCH_POSTGRES_DSN"
