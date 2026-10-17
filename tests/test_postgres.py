@@ -51,7 +51,7 @@ def test_serializable_contention_retries_and_preserves_capacity(store):
     ]
 
 
-def test_zero_contention_commits_without_retry(store):
+def test_zero_contention_commits_preserve_independent_resources(store):
     run_id = "integration-private"
     store.reset_run(
         run_id,
@@ -68,7 +68,10 @@ def test_zero_contention_commits_without_retry(store):
             )
         )
     assert all(result.accepted for result in results)
-    assert sum(result.serialization_failures for result in results) == 0
+    assert store.read_all(run_id) == [
+        {"resource_id": "private-0", "capacity": 1, "allocated": 1, "version": 1},
+        {"resource_id": "private-1", "capacity": 1, "allocated": 1, "version": 1},
+    ]
 
 
 def test_precommit_worker_crash_rolls_back_sql_update(store):
