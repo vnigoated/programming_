@@ -75,6 +75,17 @@ bash scripts/run_diversity_model_smoke.sh /content/txnagentbench "$ARTIFACT_ROOT
 This checkpoint covers all four scenario profiles in every domain using the serial policy. It is a
 model-decision integration gate, not a policy-effectiveness result.
 
+Then run the 160-cell real-model recovery checkpoint:
+
+```bash
+bash scripts/run_recovery_model_smoke.sh /content/txnagentbench "$ARTIFACT_ROOT"
+```
+
+This crosses all four domains, five non-database policies, zero/full contention, and all four
+workflow-recovery faults. It must have zero invalid and unsafe decisions; TxnGuard and the MTPO
+reproduction must complete every triggered recovery without a recovery violation. This is still a
+model-smoke artifact, not a primary TMLR result.
+
 ## Stage 5 Blinded pilot
 
 Status: completed on 2026-10-16 with 128/128 valid runs. See `docs/PILOT_REPORT.md`. The pilot

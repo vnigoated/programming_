@@ -30,8 +30,6 @@ txnagentbench run \
   --config configs/diversity_model_smoke_qwen25_7b.json \
   --output "$OUTPUT_DIR"
 
-bash scripts/finalize_artifact.sh "$OUTPUT_DIR"
-
 python - "$OUTPUT_DIR" <<'PY'
 import json
 import sys
@@ -49,3 +47,5 @@ print("Runs:", len(summaries))
 print("Model:", summaries[0]["model_name"])
 print("Revision:", summaries[0]["model_revision"])
 PY
+
+bash scripts/finalize_artifact.sh "$OUTPUT_DIR"

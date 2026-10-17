@@ -61,6 +61,19 @@ It probes persistent storage, runs all tests, executes the locked 16-run heterog
 checkpoint, validates and analyzes it, freezes every file with SHA-256, verifies the manifest,
 and enforces zero invalid/unsafe decisions. A frozen output directory cannot be resumed or altered.
 
+After that heterogeneous decision checkpoint passes, run the locked real-model workflow-recovery
+checkpoint:
+
+```bash
+bash scripts/run_recovery_model_smoke.sh \
+  /content/txnagentbench \
+  /content/drive/MyDrive/txnagentbench-artifacts
+```
+
+It executes 160 runs across all four domains, five non-database policies, zero and full contention,
+and the four workflow faults. It performs quality checks before freezing the artifact, so a failed
+gate remains inspectable and restartable.
+
 Re-running the same command skips completed run IDs. Delete a single run directory only when intentionally rerunning that exact cell.
 
 ## Colab setup
