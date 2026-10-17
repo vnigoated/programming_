@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from .benchmark import IMPLEMENTED_POLICIES
+from .benchmark import IMPLEMENTED_POLICIES, POLICY_UNSUPPORTED_FAULTS
 from .runner import IMMUTABLE_REVISION, environment_manifest, load_config, validate_config
 
 
@@ -73,12 +73,24 @@ def primary_readiness(config_path: Path, output_dir: Path | None = None) -> dict
         "All primary policy names are present." if not missing else f"Missing: {missing}",
     )
 
-    postgres_ready = "postgres_serializable" in IMPLEMENTED_POLICIES
+    unsupported_postgres_faults = sorted(
+        set(config.get("fault_modes", ["none"]))
+        & POLICY_UNSUPPORTED_FAULTS.get("postgres_serializable", set())
+    )
+    postgres_ready = (
+        "postgres_serializable" in IMPLEMENTED_POLICIES and not unsupported_postgres_faults
+    )
     mtpo_ready = "mtpo_reproduction" in IMPLEMENTED_POLICIES
     add(
         "postgres_serializable_adapter",
         postgres_ready,
-        "Implemented." if postgres_ready else "Not implemented: real PostgreSQL transactions are required.",
+        "Implemented for all configured faults."
+        if postgres_ready
+        else (
+            f"Unsupported configured faults: {unsupported_postgres_faults}"
+            if unsupported_postgres_faults
+            else "Not implemented: real PostgreSQL transactions are required."
+        ),
     )
     add(
         "mtpo_reproduction_adapter",

@@ -11,7 +11,8 @@ from .domains import build_environment
 from .models import DecisionModel
 
 
-IMPLEMENTED_POLICIES = {"serial", "naive", "occ", "txnguard"}
+IMPLEMENTED_POLICIES = {"serial", "naive", "occ", "postgres_serializable", "txnguard"}
+POLICY_UNSUPPORTED_FAULTS = {"postgres_serializable": {"dependency_change"}}
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,11 @@ class RunSpec:
 
 
 def run_benchmark(spec: RunSpec, model: DecisionModel) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    if spec.policy in {"coagent", "mtpo_reproduction", "postgres_serializable"}:
+    if spec.policy == "postgres_serializable":
+        from .postgres_benchmark import run_postgres_benchmark
+
+        return run_postgres_benchmark(spec, model)
+    if spec.policy in {"coagent", "mtpo_reproduction"}:
         raise NotImplementedError(
             f"{spec.policy} is an explicit publication gate. Implement its real adapter before final runs."
         )

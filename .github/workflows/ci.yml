@@ -35,3 +35,11 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[test,postgres]"
       - run: python -m pytest -q
+      - run: >-
+          txnagentbench run
+          --config configs/postgres_smoke.json
+          --output artifacts/postgres-smoke-ci
+          --allow-scripted
+        env:
+          TXNAGENTBENCH_POSTGRES_DSN: ${{ env.TXNAGENTBENCH_TEST_POSTGRES_DSN }}
+      - run: txnagentbench validate --output artifacts/postgres-smoke-ci

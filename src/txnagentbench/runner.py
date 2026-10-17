@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .benchmark import RunSpec, run_benchmark
+from .benchmark import POLICY_UNSUPPORTED_FAULTS
 from .models import build_model
 
 
@@ -187,6 +188,14 @@ def run_matrix(
             )
         if "postgres_serializable" not in config["policies"]:
             raise RuntimeError("Primary config must include the real PostgreSQL serializable baseline.")
+        for policy in config["policies"]:
+            unsupported = set(config.get("fault_modes", ["none"])) & POLICY_UNSUPPORTED_FAULTS.get(
+                policy, set()
+            )
+            if unsupported:
+                raise RuntimeError(
+                    f"Primary policy {policy} does not implement configured faults: {sorted(unsupported)}"
+                )
     elif not allow_scripted and any(model.get("provider") == "scripted" for model in config["models"]):
         raise RuntimeError("Pass --allow-scripted for engineering-only smoke tests.")
 

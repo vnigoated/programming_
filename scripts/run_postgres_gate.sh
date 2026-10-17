@@ -15,6 +15,14 @@ trap cleanup EXIT
 docker compose -f "$COMPOSE_FILE" up -d --wait
 python -m pip install -e ".[postgres,test]"
 python -m pytest -q -m postgres
+txnagentbench plan --config configs/postgres_smoke.json
+TXNAGENTBENCH_POSTGRES_DSN="$TXNAGENTBENCH_TEST_POSTGRES_DSN" \
+  txnagentbench run \
+  --config configs/postgres_smoke.json \
+  --output artifacts/postgres-smoke-gate \
+  --allow-scripted
+txnagentbench validate --output artifacts/postgres-smoke-gate
+txnagentbench analyze --output artifacts/postgres-smoke-gate
 
 docker compose -f "$COMPOSE_FILE" images
-echo "PASS: real PostgreSQL serializable integration gate"
+echo "PASS: real PostgreSQL serializable integration and benchmark gates"

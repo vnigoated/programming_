@@ -17,7 +17,10 @@ bash scripts/run_postgres_gate.sh
 The repository CI runs the same tests against a PostgreSQL service on every push. A green unit
 suite without the three PostgreSQL tests is insufficient; the integration job must execute them.
 
-This database-level gate must pass before the policy is connected to the benchmark matrix.
+The real database engine is connected to the benchmark matrix for `none` and `duplicate_effect`
+faults. The gate also runs a 64-cell scripted benchmark across all four domains and scenario
+families. `dependency_change` remains intentionally blocked until dependency rows participate in
+the same serializable transaction; therefore the primary matrix still cannot start.
 
 ## CoAgent / MTPO
 

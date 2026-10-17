@@ -5,6 +5,8 @@ from threading import Barrier
 import pytest
 
 from txnagentbench.postgres import PostgresSerializableStore
+from txnagentbench.benchmark import RunSpec, run_benchmark
+from txnagentbench.models import ScriptedDecisionModel
 
 
 DSN = os.environ.get("TXNAGENTBENCH_TEST_POSTGRES_DSN")
@@ -67,3 +69,20 @@ def test_zero_contention_commits_without_retry(store):
         )
     assert all(result.accepted for result in results)
     assert sum(result.serialization_failures for result in results) == 0
+
+
+def test_postgres_policy_runs_through_benchmark(monkeypatch, store):
+    monkeypatch.setenv("TXNAGENTBENCH_POSTGRES_DSN", DSN)
+    spec = RunSpec(
+        "inventory", "postgres_serializable", 2, 100, "scripted-v1", 0
+    )
+    summary, trace = run_benchmark(spec, ScriptedDecisionModel())
+    assert summary["task_success"] is True
+    assert summary["severe_violation"] is False
+    assert summary["accepted"] == 1
+    assert summary["serialization_retries"] >= 1
+    assert summary["database"]["isolation_level"] == "serializable"
+    assert any(
+        event.get("event") == "database_transaction" and event.get("sqlstate") == "40001"
+        for event in trace
+    )

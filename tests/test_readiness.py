@@ -3,7 +3,7 @@ import json
 from txnagentbench.readiness import primary_readiness
 
 
-def test_primary_readiness_fails_closed_on_unimplemented_adapters(tmp_path):
+def test_primary_readiness_fails_closed_on_unimplemented_mtpo_adapter(tmp_path):
     config = {
         "stage": "primary",
         "domains": ["inventory"],
@@ -30,5 +30,5 @@ def test_primary_readiness_fails_closed_on_unimplemented_adapters(tmp_path):
     checks = {row["check"]: row for row in result["checks"]}
     assert result["ready"] is False
     assert checks["persistent_output"]["passed"] is True
-    assert checks["postgres_serializable_adapter"]["passed"] is False
+    assert checks["postgres_serializable_adapter"]["passed"] is True
     assert checks["mtpo_reproduction_adapter"]["passed"] is False

@@ -126,6 +126,7 @@ class PostgresSerializableStore:
         resource_id: str,
         amount: int,
         after_first_read: Callable[[], None] | None = None,
+        decide: Callable[[dict[str, int | str]], str] | None = None,
     ) -> TransactionResult:
         psycopg = _psycopg()
         history: list[TransactionAttempt] = []
@@ -157,7 +158,18 @@ class PostgresSerializableStore:
                         }
                         if attempt == 1 and after_first_read is not None:
                             after_first_read()
-                        accepted = int(row[0]) - int(row[1]) >= amount
+                        action = (
+                            decide(dict(observation))
+                            if decide is not None
+                            else (
+                                "apply"
+                                if int(row[0]) - int(row[1]) >= amount
+                                else "reject"
+                            )
+                        )
+                        if action not in {"apply", "reject"}:
+                            raise ValueError(f"Unsupported transaction decision: {action!r}")
+                        accepted = action == "apply" and int(row[0]) - int(row[1]) >= amount
                         if accepted:
                             updated = connection.execute(
                                 """
